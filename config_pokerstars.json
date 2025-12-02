@@ -1,0 +1,50 @@
+{
+  "table_roi": [100, 100, 1200, 800],
+
+  "hero_cards": [
+    [x1, y1, w, h],
+    [x2, y2, w, h]
+  ],
+
+  "board_cards": [
+    [bx1, by1, bw, bh],
+    [bx2, by2, bw, bh],
+    [bx3, by3, bw, bh],
+    [bx4, by4, bw, bh],
+    [bx5, by5, bw, bh]
+  ],
+
+  "pot_text": [px, py, pw, ph],
+  "main_pot_text": [mpx, mpy, mpw, mph],
+
+  "bb_size_text": [bbx, bby, bbw, bbh],
+
+  "seats": [
+    {
+      "stack": [sx, sy, sw, sh],
+      "bet":   [bx, by, bw, bh],
+      "card_region": [cx, cy, cw, ch]
+    },
+    {
+      "stack": [sx, sy, sw, sh],
+      "bet":   [bx, by, bw, bh],
+      "card_region": [cx, cy, cw, ch]
+    }
+    // ... 6 entries total
+  ],
+
+  "dealer_button_templates": [
+    [dx1, dy1, dw, dh],
+    [dx2, dy2, dw, dh],
+    [dx3, dy3, dw, dh],
+    [dx4, dy4, dw, dh],
+    [dx5, dy5, dw, dh],
+    [dx6, dy6, dw, dh]
+  ],
+
+  "action_buttons": {
+    "fold": [fx, fy, fw, fh],
+    "call": [cx, cy, cw, ch],
+    "raise": [rx, ry, rw, rh]
+  }
+}
