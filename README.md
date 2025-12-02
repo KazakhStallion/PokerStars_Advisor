@@ -1,2 +1,3 @@
 # PokerStars_Advisor
 A real-time computer vision–based decision system designed to analyze online poker gameplay directly from live screen captures and provide Game Theory Optimal (GTO) strategy recommendations.
+The proposed system automatically detects and interprets key visual elements of the poker table, including player cards, community cards, chip stacks, bets, and pot sizes, using a combination of object detection, optical character recognition (OCR), and image segmentation techniques. These extracted features are dynamically integrated to reconstruct the full game state in real time. A GTO solver module then evaluates the reconstructed state and computes optimal actions such as fold, call, or raise, along with corresponding bet sizes.

@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en"><head>  
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta charset="utf-8">
+  <title>CV-Based Real-Time Poker Advisor | ECE, Virginia Tech | Fall 2025: ECE 4554/5554</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="">
+  <meta name="author" content="">
+
+  <!-- Le styles -->  
+  <link href="css/bootstrap.css" rel="stylesheet">
+  <style>
+  body {
+    padding-top: 60px; 
+  }
+  .vis { color: #3366CC; }
+  .data { color: #FF9900; }
+  </style>
+  <link href="css/bootstrap-responsive.min.css" rel="stylesheet">
+
+</head>
+
+<body>
+<div class="container">
+<div class="page-header">
+
+  <!-- Title and Name --> 
+  <h1>CV-Based Real-Time Poker Advisor</h1> 
+  <span style="font-size: 20px; line-height: 1.5em;"><strong>Team Members: Tamirlan Zharmagambetov, Victor Rouzer, Jai Ravula</strong></span><br>
+  <span style="font-size: 18px; line-height: 1.5em;">Fall 2025 ECE 4554/5554 Computer Vision: Course Project</span><br>
+  <span style="font-size: 18px; line-height: 1.5em;">Virginia Tech</span>
+  <hr>
+
+  <!-- Abstract -->
+  <h3>Abstract</h3>
+  <p>
+  A real-time computer vision–based decision system designed to analyze online poker gameplay directly from live screen captures and provide Game Theory Optimal (GTO) strategy recommendations. The proposed system automatically detects and interprets key visual elements of the poker table, including player cards, community cards, chip stacks, bets, and pot sizes, using a combination of object detection, optical character recognition (OCR), and image segmentation techniques. These extracted features are dynamically integrated to reconstruct the full game state in real time. A GTO solver module then evaluates the reconstructed state and computes optimal actions such as fold, call, or raise, along with corresponding bet sizes. The resulting strategy recommendations are seamlessly overlaid onto the live game interface, enabling users to access context-aware, data-driven insights without disrupting gameplay. Experimental results demonstrate that the system achieves high detection accuracy and low latency, providing an effective proof of concept for AI-assisted decision-making in digital poker environments.
+  </p>
+
+  <!-- Teaser Figure -->
+  <h3>Teaser Figure</h3>
+  <p>Figure description: A screenshot of the poker table with detected cards highlighted, player bets recognized, and a recommended move overlay (e.g., “Raise 100” with win probability displayed).</p>
+  <div style="text-align: center;">
+    <img style="height: 400px;" alt="Poker teaser" src="poker.png">
+  </div>
+
+  <!-- Introduction -->
+  <br><br>
+  <h3>Introduction</h3>
+  <p>
+  Online poker requires players to make rapid, high-stakes decisions under conditions of uncertainty, where incomplete information and psychological pressure play crucial roles. Traditionally, decision-making in this context has relied heavily on player intuition, experience, and pattern recognition. However, recent advances in computational game theory and computer vision offer opportunities to improve human judgment with data-driven, mathematically grounded strategies.
+  </p>
+  <p>
+  Most existing implementations of Game Theory Optimal (GTO) strategies and poker solvers depend on direct access to the underlying game state via APIs or structured hand histories, which are typically unavailable on commercial online poker platforms. In contrast, our system introduces a vision-based approach that reconstructs the complete game state directly from live screen captures, identifying cards, bets, and pot sizes in real time. This allows the framework to operate seamlessly within standard web-based poker interfaces—without requiring API access or modification of the game client—enabling players to receive real-time strategic recommendations as they play.
+  </p>
+
+  <!-- Approach -->
+  <br><br>
+  <h3>Approach</h3>
+
+  <h4>Problem Definition &amp; Project Scope:</h4>
+  <p>
+  The project target is to develop a real-time advisory system using CV + ML algorithms and models for No Limit Texas Hold Em’ Poker. This turn-based, imperfect information game can benefit from an advisory agent that will serve as a perception-to-decision assistant to output context-aware recommended actions based on game state data. 
+  </p>
+  <p>
+  The core challenge for the CV-aspect of the project is mapping potentially noisy visual observations to a validated game state, under real-time constraints. The system must maintain confidence in their computer-vision detection outputs, and only produce advice when the quality of state knowledge is high. The scope will be limited to 6-max No-Limit Hold’em cash games on a single desktop client with standard rules. The screen-capture will be read only, and the model response is also read only, there is no interaction direction interaction between both softwares. The deliverables include the perception pipeline, consisting of a CV model, state reconstruction, decision module, and response production. The system should also include a user-friendly decision indicator, and provide accessible logging and replay for evaluation.
+  </p>
+
+<style>
+/* Overall font and spacing */
+.system-overview {
+  font-size: 16px;
+  line-height: 1.6em;
+}
+
+/* Make h4 (System Overview) bold and clear */
+.system-overview h4 {
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+/* Indent all subsections (h5s and their lists) */
+.system-overview .stage {
+  margin-left: 40px;   /* indentation for each stage */
+  margin-bottom: 15px; /* spacing between stages */
+}
+
+/* Style h5 (stage titles) */
+.system-overview .stage h5 {
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+/* Indent bullets within each stage */
+.system-overview ul {
+  margin-left: 20px;
+  padding-left: 20px;
+}
+</style>
+
+<div class="system-overview">
+  <h4>System Overview:</h4>
+  <p>
+    The system will ingest game state images to derive information from the image, and store the knowledge in a validated and structured game state memory. Our system will transform raw image frames into decisions using five stages: capture, perception, state reconstruction, information processing, and decision making.
+  </p>
+
+  <div class="stage">
+    <h5>Capture:</h5>
+    <ul>
+      <li>This stage will capture a stable and consistent image of the game screen. A region of interest will be locked around relevant portions of the game UI.</li>
+      <li>Frames are sampled at a fixed interval, each timestamped.</li>
+      <li>Frames are normalized and vectorized for processing by the computer vision model.</li>
+      <li>The software implementing the capture phase must also detect changes in the window size and potential occlusions.</li>
+    </ul>
+  </div>
+
+  <div class="stage">
+    <h5>Perception:</h5>
+    <ul>
+      <li>Find consistent table anchors from the image and compute a homography to canonical coordinates.</li>
+      <li>The CV model (through training) will detect and classify cards (rank &amp; suit), stack sizes, pot sizes, bet sizes, active players, and player actions. The model should also detect UI cues such as enabled/disabled action buttons, blinds’ positioning, and players entering or leaving the table.</li>
+      <li>All this information will be used to develop the knowledge repository of the game state in real time.</li>
+    </ul>
+  </div>
+
+  <div class="stage">
+    <h5>State Reconstruction:</h5>
+    <ul>
+      <li>Maintains a canonical data structure to store the normalized game state.</li>
+      <li>Advances a finite-state machine (FSM) for game progression that enforces invariants to catch detection (OCR) slips/misreads.</li>
+      <li>Only commits high-confidence changes to the game state repository.</li>
+    </ul>
+  </div>
+
+  <div class="stage">
+    <h5>Information Processing:</h5>
+    <ul>
+      <li>Derives features from the game state including pot odds, stack-pot ratio, board texture, and opponent action history.</li>
+      <li>Incorporates statistical analysis into ML model input including VPIP (voluntarily-put-in-pot), 3- and 4-bet %, % of hands attempted to steal, and went-to-showdown rate.</li>
+      <li>The ML model outputs a feature vector and summary that remains stable across frames until the next state change.</li>
+    </ul>
+  </div>
+
+  <div class="stage">
+    <h5>Decision Making:</h5>
+    <ul>
+      <li>This block ingests the feature vector and summary from the ML model.</li>
+      <li>Considers all possible actions using statistical tools such as expected value (EV) for each possible action.</li>
+      <li>Blends ML and EV scores via a weighted sum to derive the best possible action along with a confidence score.</li>
+      <li>Selects the top-blended candidate and returns the recommended decision to the user.</li>
+    </ul>
+  </div>
+</div>
+
+
+  <!-- Experiments and Results -->
+  <br><br>
+  <h3>Experiments and Results</h3>
+  <p>
+  We will evaluate the system using a dataset collected directly from PokerStars, a popular online poker website, by capturing screenshots of live tables under normal play conditions. Data collection will be composed from captures of at least 100 distinct hands to capture different game states. We plan to also support this dataset with any publicly available poker screenshot datasets we can find for validation. Each captured frame will be annotated with the ground-truth card labels (rank and suit for the player and community cards), chip/bet numeric values, and action indicators (fold/call/raise button states and active player highlights). Because our pilot focuses on one consistent client UI (PokerStars), we will rely on a fixed region of interest to capture the game state.
+  </p>
+  <p>
+  Our team will develop the data collection pipeline, finite state machine (FSM) for game-state validation, and the integration layer connecting perception outputs to the decision engine. The decision-making module, including EV calculations and GTO blending, will also be coded from scratch in Python. We will adapt and retrain existing frameworks for visual perception: YOLOv8 (for object detection such as bets and cards) and Tesseract OCR (for text extraction such as player actions). The models will be fine-tuned on our annotated dataset using PyTorch and OpenCV for preprocessing and data augmentation.
+  </p>
+  <p>
+  The system will use a multi-model architecture optimized for modularity and accuracy. A YOLOv8 object detector will locate key elements such as cards, player boxes, and chip stacks. Cropped outputs will feed into smaller specialized models: a CNN-based classifier for rank and suit recognition, an OCR module for bet sizes and pot values, and a UI-state classifier for detecting player turn indicators and enabled/disabled buttons. These models will be integrated through an FSM that enforces logical consistency across frames.
+  </p>
+  <p>
+  Each module will use an 80/20 train-test split. Performance will be measured with precision, recall, and F1-score for object detection; classification accuracy for card recognition; and character-level accuracy for OCR. System performance will be evaluated through frames per second (FPS) and end-to-end latency.
+  </p>
+
+  <h4>Success Metrics:</h4>
+  <style>
+  .success-metrics {
+    font-size: 16px;        /* slightly larger text */
+    line-height: 1.6em;     /* improve line spacing */
+    margin-left: 30px;      /* indent the list */
+    list-style-position: outside;
+  }
+
+  /* Adds vertical space between bullets */
+  .success-metrics li {
+    margin-bottom: 12px;    /* adjust to your liking (10–15px looks good) */
+  }
+  </style>
+
+  <ul class="success-metrics">
+    <li><strong>Card Detection Accuracy:</strong> % of correctly identified cards.<br>Target: ~95% accuracy on test frames.</li>
+    <li><strong>Bet Detection Accuracy:</strong> Mean absolute error (MAE) between predicted and true chip values.<br>Target: ~95% accuracy on test frames.</li>
+    <li><strong>Game State Accuracy:</strong> % of frames where the full state matches ground truth.<br>Target: ~95% accuracy on test frames.</li>
+    <li><strong>Strategy Advice Accuracy:</strong> % of recommended moves matching the GTO table for the detected state.<br>Target: 90% agreement with GTO strategy.</li>
+    <li><strong>System Performance:</strong> Frames per second (FPS) and end-to-end latency.<br>Target: ~10 FPS on standard desktop hardware.</li>
+  </ul>
+
+  <p>
+  An example of a successful experiment would be correctly detecting the hand (Ah, Kd) and board (7c, Qs, 10h), with a recommended raise of 100 highlighted on the overlay. But its important to note that while this case is successful a small OCR error in stack size could slightly alter the EV calculation, leading to a wrong decision
+  </p>
+  <p>
+  As for experiment objectives and uncertainties, all experiments will use screenshots from the same PokerStars client with a fixed region of interest. Because of this the table layout, colors, and fonts will stay consistent, so visual conditions will not vary between tests. Our goal is to verify that each stage of the pipeline works reliably under these stable conditions.
+  </p>
+  <p>
+  We will test object detection for cards, chip stacks, and player boxes, OCR for reading chip and pot values, and the FSM for maintaining correct game-state transitions. We will also evaluate the decision module to ensure it outputs accurate GTO recommendations.
+  </p>
+  <p>
+  Because the environment is consistent, our main uncertainties are about performance and integration. We need to see if the system can keep real-time speed (around 10 FPS) without losing accuracy, and how small perception errors might lead to incorrect strategic advice.
+  </p>
+
+  <!-- Conclusion -->
+  <br><br>
+  <h3>Conclusion</h3>
+  <p>
+  This project presents a real-time, computer vision–based poker advisor that reconstructs full game states directly from screen captures without relying on APIs or structured hand histories. Using a modular combination of YOLOv8 detection, CNN-based classification, OCR, and FSM-based validation, the system aims to produce accurate and stable game-state interpretation under real-world online poker conditions.
+  </p>
+  <p>
+  Planned experiments will test detection accuracy, OCR reliability, overall game-state reconstruction, and real-time performance. Expected results indicate that the system can exceed 90% accuracy across most visual tasks while maintaining low latency, supporting the feasibility of real-time CV-driven poker analysis. Future work will explore generalizing the system to different poker sites and potentially 3-dimensional poker environments.
+  </p>
+
+  <!-- References -->
+  <br><br>
+  <h3>References</h3>
+  <ul>
+    <li>OpenCV documentation: <a href="https://opencv.org">https://opencv.org</a></li>
+    <li>YOLOv8 object detection: <a href="https://ultralytics.com">https://ultralytics.com</a></li>
+    <li>Tesseract OCR: <a href="https://github.com/tesseract-ocr/tesseract">https://github.com/tesseract-ocr/tesseract</a></li>
+    <li>Game Theory Optimal (GTO) Poker: <a href="https://www.pokerstrategy.com/gto/">https://www.pokerstrategy.com/gto/</a></li>
+    <li>PyTorch CNN documentation: <a href="https://pytorch.org">https://pytorch.org</a></li>
+  </ul>
+
+  <hr>
+  <footer> 
+    <p>© Tamirlan Zharmagambetov, Victor Rouzer, Jai Ravula</p>
+  </footer>
+</div>
+</div>
+
+<br><br>
+
+</body></html>
