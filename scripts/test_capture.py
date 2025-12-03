@@ -1,5 +1,5 @@
 import cv2
-from ..poker.capture import load_config, ScreenCapture
+from poker.capture import load_config, ScreenCapture
 
 def draw_rois(frame, cfg):
     # Hero cards
