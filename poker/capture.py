@@ -1,12 +1,13 @@
 import json
 from pathlib import Path
 from typing import Dict, Any
+import os
 
 import cv2
 import numpy as np
 from mss import mss
 
-CONFIG_PATH = Path("config_pokerstars.json")
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config_pokerstars.json")
 
 # Absolute screen coords of the PokerStars table window
 TABLE_LEFT = 959     # pixels from left edge of monitor
