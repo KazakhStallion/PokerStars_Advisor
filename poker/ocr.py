@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
@@ -25,11 +26,8 @@ def crop_roi(frame: np.ndarray, roi: List[int]) -> np.ndarray:
 
 
 def preprocess_for_ocr(img: np.ndarray) -> np.ndarray:
-    """Simple preprocessing for white text on dark BG."""
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    # Upscale a bit to help Tesseract
     gray = cv2.resize(gray, None, fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
-    # Binarize
     _, th = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     return th
 
@@ -42,10 +40,6 @@ def ocr_text(img: np.ndarray, whitelist: str, psm: int = 7) -> str:
 
 
 def ocr_amount(img: np.ndarray) -> Optional[float]:
-    """
-    OCR a chip amount like '$1.23' or '1.23'.
-    Returns float or None if nothing usable.
-    """
     txt = ocr_text(img, "0123456789.,$", psm=7)
     txt = txt.replace(",", "").replace("$", "")
     m = re.search(r"(\d+(\.\d+)?)", txt)
@@ -61,33 +55,22 @@ def ocr_amount(img: np.ndarray) -> Optional[float]:
 
 
 def roi_has_card(img: np.ndarray, var_thresh: float = 200.0) -> bool:
-    """
-    Heuristic: card region has significantly higher variance than empty slot.
-    Tune var_thresh if needed.
-    """
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     return float(gray.var()) > var_thresh
 
 
 def detect_button(img: np.ndarray) -> bool:
-    """
-    Detect yellow-ish dealer button using HSV thresholding.
-    This is rough but works well enough for PokerStars.
-    """
     if img is None or img.size == 0:
         return False
-
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    # Yellow range
     lower = np.array([20, 80, 80])
     upper = np.array([35, 255, 255])
     mask = cv2.inRange(hsv, lower, upper)
     ratio = mask.mean() / 255.0
-    return ratio > 0.08  # ~8% of ROI is yellow
+    return ratio > 0.08
 
 
 def normalize_status(text: str) -> Optional[str]:
-    """Normalize OCR'd status text into canonical actions."""
     t = text.lower().strip()
     if not t:
         return None
@@ -101,13 +84,12 @@ def normalize_status(text: str) -> Optional[str]:
         return "bet"
     if "raise" in t or "rais" in t:
         return "raise"
-    if "sit" in t:  # "Sitting out"
+    if "sit" in t:
         return "sit_out"
     return None
 
 
 def infer_street(board_card_imgs: List[np.ndarray]) -> str:
-    """Infer street by counting visible board cards."""
     present = sum(1 for img in board_card_imgs if roi_has_card(img))
     if present == 0:
         return "preflop"
@@ -124,23 +106,14 @@ def infer_street(board_card_imgs: List[np.ndarray]) -> str:
 
 
 def split_rank_suit(card_img: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Split a card ROI into (rank_patch, suit_patch).
-
-    Assumes rank/suit are in the top-left corner.
-    Fractions are tuned for typical PokerStars card art; tweak if needed.
-    """
     h, w = card_img.shape[:2]
 
-    # Left portion where symbols live
     x0 = 0
     x1 = int(0.40 * w)
 
-    # Rank: very top
     y0_rank = 0
     y1_rank = int(0.40 * h)
 
-    # Suit: just below rank
     y0_suit = int(0.35 * h)
     y1_suit = int(0.80 * h)
 
@@ -160,10 +133,6 @@ def _prep_gray(patch: np.ndarray) -> np.ndarray:
 
 
 def recognize_card(card_img: np.ndarray, score_thresh: float = 0.6) -> str:
-    """
-    Template-match rank and suit using preloaded templates.
-    Returns like 'Ah', 'Kd', or '??' if low confidence.
-    """
     if card_img is None or card_img.size == 0:
         return "??"
 
@@ -187,7 +156,6 @@ def recognize_card(card_img: np.ndarray, score_thresh: float = 0.6) -> str:
 
 
 def extract_table_state(frame: np.ndarray, cfg: Dict[str, Any]) -> TableState:
-    # --- Cards ---
     hero_cards_imgs = [crop_roi(frame, roi) for roi in cfg["hero_cards"]]
     board_cards_imgs = [crop_roi(frame, roi) for roi in cfg["board_cards"]]
 
@@ -196,14 +164,12 @@ def extract_table_state(frame: np.ndarray, cfg: Dict[str, Any]) -> TableState:
 
     street = infer_street(board_cards_imgs)
 
-    # --- Pot info ---
     pot_img = crop_roi(frame, cfg["pot_text"])
     total_pot_img = crop_roi(frame, cfg["total_pot_text"])
 
     pot_size = ocr_amount(pot_img) or 0.0
     total_pot = ocr_amount(total_pot_img) or 0.0
 
-    # --- Seats ---
     seats: List[SeatState] = []
     button_seat: Optional[int] = None
 
@@ -231,7 +197,7 @@ def extract_table_state(frame: np.ndarray, cfg: Dict[str, Any]) -> TableState:
             button_seat = seat_id
 
         has_cards = roi_has_card(card_region_img)
-        is_hero = (seat_id == 0)  # by config: hero_bottom first
+        is_hero = seat_id == 0
         is_sitting_out = status_norm == "sit_out"
         is_active = has_cards and (status_norm not in ("fold", "sit_out"))
 
@@ -243,7 +209,7 @@ def extract_table_state(frame: np.ndarray, cfg: Dict[str, Any]) -> TableState:
             is_hero=is_hero,
             has_cards=has_cards,
             is_active=is_active,
-            position=None,  # can be filled based on button_seat later
+            position=None,
             last_status=status_norm if status_norm not in ("sit_out", None) else None,
             is_sitting_out=is_sitting_out,
         )
@@ -269,44 +235,60 @@ def main():
     cfg = load_config()
     cap = ScreenCapture(cfg)
 
+    TARGET_FPS = 10
+    FRAME_DELAY = 1.0 / TARGET_FPS
+    OCR_EVERY = 2
+
+    frame_idx = 0
+    last_state: Optional[TableState] = None
+
     while True:
+        start = time.time()
         frame = cap.grab_table_frame()
-        state = extract_table_state(frame, cfg)
 
-        # Print raw dataclass
-        print(state)
+        # Run full OCR only every OCR_EVERY frames
+        if frame_idx % OCR_EVERY == 0 or last_state is None:
+            last_state = extract_table_state(frame, cfg)
+            print(last_state)  # only when recomputed
 
-        # Optional debug overlay
+        state = last_state
+
         debug = frame.copy()
-        cv2.putText(
-            debug,
-            f"street: {state.street}",
-            (20, 40),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
-            (0, 255, 0),
-            2,
-        )
-        cv2.putText(
-            debug,
-            f"pot: {state.pot_size:.2f}  total: {state.total_pot:.2f}",
-            (20, 80),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (0, 255, 255),
-            2,
-        )
+        if state is not None:
+            cv2.putText(
+                debug,
+                f"street: {state.street}",
+                (20, 40),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (0, 255, 0),
+                2,
+            )
+            cv2.putText(
+                debug,
+                f"pot: {state.pot_size:.2f}  total: {state.total_pot:.2f}",
+                (20, 80),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 255, 255),
+                2,
+            )
 
-        # Highlight button seat ROI if found
-        if state.button_seat is not None:
-            seat_cfg = cfg["seats"][state.button_seat]
-            x, y, w, h = seat_cfg["button_roi"]
-            cv2.rectangle(debug, (x, y), (x + w, y + h), (0, 0, 255), 2)
+            if state.button_seat is not None:
+                seat_cfg = cfg["seats"][state.button_seat]
+                x, y, w, h = seat_cfg["button_roi"]
+                cv2.rectangle(debug, (x, y), (x + w, y + h), (0, 0, 255), 2)
 
         cv2.imshow("Table + OCR debug", debug)
         key = cv2.waitKey(1) & 0xFF
         if key == ord("q"):
             break
+
+        frame_idx += 1
+
+        elapsed = time.time() - start
+        if elapsed < FRAME_DELAY:
+            time.sleep(FRAME_DELAY - elapsed)
 
     cv2.destroyAllWindows()
 
