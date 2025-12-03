@@ -1,50 +1,68 @@
 {
-  "table_roi": [100, 100, 1200, 800],
-
   "hero_cards": [
-    [x1, y1, w, h],
-    [x2, y2, w, h]
+    [625, 600, 88, 74],
+    [717, 600, 88, 74]
   ],
 
   "board_cards": [
-    [bx1, by1, bw, bh],
-    [bx2, by2, bw, bh],
-    [bx3, by3, bw, bh],
-    [bx4, by4, bw, bh],
-    [bx5, by5, bw, bh]
+    [478, 321, 88, 123],
+    [574, 321, 88, 123],
+    [670, 321, 88, 123],
+    [766, 321, 88, 123],
+    [864, 321, 88, 123] 
   ],
 
-  "pot_text": [px, py, pw, ph],
-  "main_pot_text": [mpx, mpy, mpw, mph],
-
-  "bb_size_text": [bbx, bby, bbw, bbh],
+  "pot_text": [522, 284, 400, 37],
+  "total_pot_text": [574, 483, 280, 28],
 
   "seats": [
     {
-      "stack": [sx, sy, sw, sh],
-      "bet":   [bx, by, bw, bh],
-      "card_region": [cx, cy, cw, ch]
+      "name": "hero_bottom",
+      "stack": [671, 722, 183, 36],
+      "bet":   [653, 563, 117, 23],
+      "card_region": [625, 601, 180, 74],
+      "button_roi":  [557, 591, 46, 39],
+      "status_roi":  [669, 680, 156, 35]
     },
     {
-      "stack": [sx, sy, sw, sh],
-      "bet":   [bx, by, bw, bh],
-      "card_region": [cx, cy, cw, ch]
+      "name": "bottom_right",
+      "stack": [1213, 543, 179, 35],
+      "bet":   [953, 505, 110, 23],
+      "card_region": [1166, 455, 180, 37],
+      "button_roi":  [1033, 538, 46, 38],
+      "status_roi":  [1213, 502, 159, 33]
+    },
+    {
+      "name": "top_right",
+      "stack": [1168, 235, 181, 33],
+      "bet":   [905, 265, 115, 24],
+      "card_region": [1122, 147, 178, 38],
+      "button_roi":  [1104, 303, 46, 40],
+      "status_roi":  [1171, 195, 154, 31]
+    },
+    {
+      "name": "top_middle",
+      "stack": [575, 140, 186, 35],
+      "bet":   [783, 200, 130, 23],
+      "card_region": [624, 50, 179, 40],
+      "button_roi":  [755, 222, 46, 39],
+      "status_roi":  [603, 99, 153, 32]
+    },
+    {
+      "name": "top_left",
+      "stack": [79, 235, 185, 36],
+      "bet":   [424, 294, 145, 25],
+      "card_region": [128, 147, 181, 39],
+      "button_roi":  [294, 310, 46, 41],
+      "status_roi":  [102, 195, 156, 34]
+    },
+    {
+      "name": "bottom_left",
+      "stack": [31, 541, 190, 37],
+      "bet":   [367, 503, 129, 25],
+      "card_region": [84, 455, 178, 38],
+      "button_roi":  [273, 437, 46, 40],
+      "status_roi":  [61, 545, 156, 33]
     }
-    // ... 6 entries total
-  ],
-
-  "dealer_button_templates": [
-    [dx1, dy1, dw, dh],
-    [dx2, dy2, dw, dh],
-    [dx3, dy3, dw, dh],
-    [dx4, dy4, dw, dh],
-    [dx5, dy5, dw, dh],
-    [dx6, dy6, dw, dh]
-  ],
-
-  "action_buttons": {
-    "fold": [fx, fy, fw, fh],
-    "call": [cx, cy, cw, ch],
-    "raise": [rx, ry, rw, rh]
-  }
+  ]
 }

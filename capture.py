@@ -8,6 +8,12 @@ from mss import mss
 
 CONFIG_PATH = Path("config_pokerstars.json")
 
+# Absolute screen coords of the PokerStars table window
+TABLE_LEFT = 959     # pixels from left edge of monitor
+TABLE_TOP = 603      # pixels from top edge of monitor
+TABLE_WIDTH = 1429   # window width in pixels
+TABLE_HEIGHT = 985   # window height in pixels
+
 
 def load_config() -> Dict[str, Any]:
     with open(CONFIG_PATH, "r") as f:
@@ -17,12 +23,15 @@ def load_config() -> Dict[str, Any]:
 class ScreenCapture:
     def __init__(self, cfg: Dict[str, Any]):
         self.cfg = cfg
-        self.table_roi = cfg["table_roi"]  # [x, y, w, h]
         self.sct = mss()
 
     def grab_table_frame(self) -> np.ndarray:
-        x, y, w, h = self.table_roi
-        monitor = {"top": y, "left": x, "width": w, "height": h}
+        monitor = {
+            "top": TABLE_TOP,
+            "left": TABLE_LEFT,
+            "width": TABLE_WIDTH,
+            "height": TABLE_HEIGHT,
+        }
         sct_img = self.sct.grab(monitor)
         frame = np.array(sct_img)[:, :, :3]  # BGRA → BGR
         return frame

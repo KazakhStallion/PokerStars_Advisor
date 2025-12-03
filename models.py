@@ -1,25 +1,26 @@
-from dataclasses import dataclass, field
+# models.py
+from dataclasses import dataclass
 from typing import List, Optional
 
 @dataclass
 class SeatState:
-    seat_id: int              # 0..5 for 6-max
-    is_occupied: bool
-    stack: Optional[float]    # chips behind
-    bet: Optional[float]      # chips in front this street
-    has_cards: bool           # player dealt-in
+    seat_id: int
+    name: str                    # "hero_bottom", etc.
+    stack: Optional[float]       # chips behind
+    bet: Optional[float]         # chips in front this street
     is_hero: bool
-    is_active: bool           # current turn?
-    position: Optional[str]   # "BTN", "SB", "BB", "UTG", "MP", "CO"
+    has_cards: bool
+    is_active: bool
+    position: Optional[str]      # "BTN", "SB", "BB", "UTG", "MP", "CO"
+    last_status: Optional[str] = None   # "fold", "check", "bet", "raise", "call"
+    is_sitting_out: bool = False        
 
 @dataclass
-class FrameState:
-    hero_cards: List[str]                # ["Ah", "Kd"]
-    board_cards: List[str]               # ["7c", "Qs", "Th", "4d", "2s"]
+class TableState:
+    street: str                        # "preflop", "flop", "turn", "river"
+    hero_cards: List[str]
+    board_cards: List[str]
     pot_size: float
-    main_pot: float
-    side_pots: List[float]
-    seats: List[SeatState]               # len=6
-    street: str                          # "preflop", "flop", "turn", "river"
-    bb_size: float
-    table_ok: bool = True                # false if occluded / not detected
+    total_pot: float
+    button_seat: Optional[int]         # 0..5 or None
+    seats: List[SeatState]             # len = 6
