@@ -13,12 +13,13 @@ from poker.capture import load_config, ScreenCapture
 from poker.models import SeatState, TableState
 from poker.card_templates import load_all_templates, match_best_template
 
-# Load rank / suit templates once at import
+# Load rank & suit templates
 RANK_TEMPLATES, SUIT_TEMPLATES = load_all_templates()
 
+# Whitelist of lettters for Tesseract
+STATUS_WHITELIST = "ABCDEFGHIKLMNORSTUYabcdefghiklmnorstuy,.: "
 
-# ---------------------- Generic ROI helpers ----------------------
-
+### ROI helpers
 
 def crop_roi(frame: np.ndarray, roi: List[int]) -> np.ndarray:
     x, y, w, h = roi
@@ -32,27 +33,36 @@ def preprocess_for_ocr(img: np.ndarray) -> np.ndarray:
     return th
 
 
-def ocr_text(img: np.ndarray, whitelist: str, psm: int = 7) -> str:
+# Use LSTM engine only
+BASE_CONFIG = "--oem 1"
+
+def ocr_text_fast(img, whitelist: str, psm: int = 7) -> str:
+    """OCR helper with OEM=1 and a tight whitelist."""
     proc = preprocess_for_ocr(img)
-    config = f"--psm {psm} -c tessedit_char_whitelist={whitelist}"
-    txt = pytesseract.image_to_string(proc, config=config)
+    cfg = f"{BASE_CONFIG} --psm {psm} -c tessedit_char_whitelist={whitelist}"
+    txt = pytesseract.image_to_string(proc, config=cfg)
     return txt.strip()
 
 
-def ocr_amount(img: np.ndarray) -> Optional[float]:
-    txt = ocr_text(img, "0123456789.,$", psm=7)
+def ocr_amount_fast(img, max_reasonable: float = 100000.0):
+    """Digits-only OCR for chip amounts."""
+    txt = ocr_text_fast(img, "0123456789.,$", psm=7)
     txt = txt.replace(",", "").replace("$", "")
+
     m = re.search(r"(\d+(\.\d+)?)", txt)
     if not m:
         return None
     try:
-        return float(m.group(1))
+        val = float(m.group(1))
     except ValueError:
         return None
 
+    if val <= 0 or val > max_reasonable:
+        return None
+    return val
 
-# ---------------------- Presence / status heuristics ----------------------
 
+### Game status
 
 def roi_has_card(img: np.ndarray, var_thresh: float = 200.0) -> bool:
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -82,10 +92,12 @@ def normalize_status(text: str) -> Optional[str]:
         return "call"
     if "bet" in t:
         return "bet"
-    if "raise" in t or "rais" in t:
+    if "rais" in t:
         return "raise"
     if "sit" in t:
         return "sit_out"
+    if "all" in t:
+        return "allin"
     return None
 
 
@@ -102,54 +114,72 @@ def infer_street(board_card_imgs: List[np.ndarray]) -> str:
     return "unknown"
 
 
-# ---------------------- Card template matching ----------------------
+def get_seat_status(status_img, stack_img) -> tuple[str | None, str, str]:
+    # Primary status in the name/status area
+    status_raw = ocr_text_fast(status_img, STATUS_WHITELIST, psm=7)
+    status_norm = normalize_status(status_raw)
+
+    if status_norm == "sit_out":
+        return status_norm, status_raw, ""
+
+    # 2) Special case: 'Sitting Out' can appear where the stack usually is
+    stack_text_raw = ocr_text_fast(stack_img, "SgintuO ", psm=7)  # minimal letters for 'Sitting Out'
+    stack_status_norm = normalize_status(stack_text_raw)
+
+    if stack_status_norm == "sit_out":
+        return stack_status_norm, status_raw, stack_text_raw
+
+    return status_norm, status_raw, stack_text_raw
 
 
-def split_rank_suit(card_img: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    h, w = card_img.shape[:2]
+### Card template matching
 
-    x0 = 0
-    x1 = int(0.40 * w)
-
-    y0_rank = 0
-    y1_rank = int(0.40 * h)
-
-    y0_suit = int(0.35 * h)
-    y1_suit = int(0.80 * h)
-
-    rank_patch = card_img[y0_rank:y1_rank, x0:x1]
-    suit_patch = card_img[y0_suit:y1_suit, x0:x1]
-
-    return rank_patch, suit_patch
+def card_present(img, var_thresh: float = 150.0) -> bool:
+    """Heuristic: does this ROI look like it contains a card?"""
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    return float(gray.var()) > var_thresh
 
 
-def _prep_gray(patch: np.ndarray) -> np.ndarray:
-    if patch.ndim == 3:
-        g = cv2.cvtColor(patch, cv2.COLOR_BGR2GRAY)
+def prep_gray(img: np.ndarray) -> np.ndarray:
+    if img.ndim == 3:
+        g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     else:
-        g = patch
+        g = img
     g = cv2.GaussianBlur(g, (3, 3), 0)
     return g
 
 
-def recognize_card(card_img: np.ndarray, score_thresh: float = 0.6) -> str:
-    if card_img is None or card_img.size == 0:
-        return "??"
+def scan_templates(roi_gray: np.ndarray, templates: dict[str, np.ndarray]):
+    """
+    Slide each template over the ROI and return (best_label, best_score).
+    Works even if ROI height differs (hero vs board).
+    """
+    best_label = "?"
+    best_score = -1.0
 
-    rank_patch, suit_patch = split_rank_suit(card_img)
-    if rank_patch.size == 0 or suit_patch.size == 0:
-        return "??"
+    for label, tmpl in templates.items():
+        th, tw = tmpl.shape[:2]
 
-    rank_gray = _prep_gray(rank_patch)
-    suit_gray = _prep_gray(suit_patch)
+        # Skip obviously invalid cases
+        if roi_gray.shape[0] < th or roi_gray.shape[1] < tw:
+            # Template bigger than ROI; resize template down
+            scale = min(roi_gray.shape[1] / tw, roi_gray.shape[0] / th)
+            if scale <= 0:
+                continue
+            tmpl_resized = cv2.resize(
+                tmpl, (int(tw * scale), int(th * scale)), interpolation=cv2.INTER_AREA
+            )
+        else:
+            tmpl_resized = tmpl
 
-    rank_label, rank_score = match_best_template(rank_gray, RANK_TEMPLATES)
-    suit_label, suit_score = match_best_template(suit_gray, SUIT_TEMPLATES)
+        res = cv2.matchTemplate(roi_gray, tmpl_resized, cv2.TM_CCOEFF_NORMED)
+        _, max_val, _, _ = cv2.minMaxLoc(res)
 
-    if rank_score < score_thresh or suit_score < score_thresh:
-        return "??"
+        if max_val > best_score:
+            best_score = max_val
+            best_label = label
 
-    return f"{rank_label}{suit_label}"
+    return best_label, best_score
 
 
 # ---------------------- Table state extraction ----------------------

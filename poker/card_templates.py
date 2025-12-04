@@ -6,7 +6,6 @@ import numpy as np
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
-# Adjust these if your file names differ
 RANK_LABELS = {
     "A": "A",
     "K": "K",
@@ -30,12 +29,13 @@ SUIT_LABELS = {
     "s": "s",  # spades
 }
 
+
 def _load_templates(subdir: str, label_map: Dict[str, str]) -> Dict[str, np.ndarray]:
     base = TEMPLATES_DIR / subdir
     templates: Dict[str, np.ndarray] = {}
 
     for p in base.glob("*.*"):
-        stem = p.stem  # e.g. "A", "K", "h", "d", etc.
+        stem = p.stem
         if stem not in label_map:
             continue
 
@@ -43,7 +43,7 @@ def _load_templates(subdir: str, label_map: Dict[str, str]) -> Dict[str, np.ndar
         if img is None:
             continue
 
-        # Normalize size & contrast a bit
+        # Normalize size & contrast
         img = cv2.resize(img, (0, 0), fx=1.0, fy=1.0, interpolation=cv2.INTER_AREA)
         img = cv2.GaussianBlur(img, (3, 3), 0)
 
@@ -61,21 +61,20 @@ def load_all_templates() -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
 
 
 def match_best_template(patch_gray: np.ndarray, templates: Dict[str, np.ndarray]) -> Tuple[str, float]:
-    """Return (label, score) for best matching template using TM_CCOEFF_NORMED."""
+    """Return (label, score) for best matching template"""
     best_label = "?"
     best_score = -1.0
 
     for label, tmpl in templates.items():
-        # Resize patch to template size or template to patch size
         ph, pw = patch_gray.shape
         th, tw = tmpl.shape
 
         if ph < th or pw < tw:
-            # Card patch smaller than template: resize template down
+            # Resize template down
             tmpl_resized = cv2.resize(tmpl, (pw, ph), interpolation=cv2.INTER_AREA)
             patch = patch_gray
         else:
-            # Patch >= template: resize patch down
+            # Resize patch down
             patch = cv2.resize(patch_gray, (tw, th), interpolation=cv2.INTER_AREA)
             tmpl_resized = tmpl
 
