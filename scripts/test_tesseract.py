@@ -20,6 +20,8 @@ def main():
     cap = ScreenCapture(cfg)
 
     frame = cap.grab_table_frame()
+    
+    cv2.imshow("full frame", frame)
 
     print("=== POT ROIS ===")
     # Pot
