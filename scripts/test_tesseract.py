@@ -1,4 +1,4 @@
-# scripts/test_tesseract_rois.py
+# scripts/test_tesseract.py
 
 import cv2
 
