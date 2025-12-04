@@ -67,6 +67,27 @@ def ocr_amount_fast(img, max_reasonable: float = 100000.0):
     return val
 
 
+def detect_time_bar(img: np.ndarray) -> bool:
+    """
+    Detect the yellow→green action timer bar.
+    It is a saturated yellow/green strip on dark background.
+    """
+    if img is None or img.size == 0:
+        return False
+
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    h, s, v = cv2.split(hsv)
+
+    # Hue ~20–90 (yellow to green), decent saturation and brightness
+    mask = (
+        (h >= 20) & (h <= 90) &
+        (s >= 80) &
+        (v >= 80)
+    )
+
+    ratio = mask.mean()  # fraction of pixels
+    return ratio > 0.15  # tune this if needed
+
 # ---------------------------------------------------------------------
 # Status / street helpers (same as before; used in test_tesseract)
 # ---------------------------------------------------------------------
@@ -109,7 +130,7 @@ def normalize_status(text: str) -> Optional[str]:
 
 
 def infer_street(board_card_imgs: List[np.ndarray]) -> str:
-    present = sum(1 for img in board_card_imgs if roi_has_card(img))
+    present = sum(1 for img in board_card_imgs if board_card_present(img))
     if present == 0:
         return "preflop"
     if present == 3:
@@ -192,6 +213,43 @@ def scan_templates(roi_gray: np.ndarray, templates: dict[str, np.ndarray]):
     return best_label, best_score
 
 
+def has_back_cards(img: np.ndarray) -> bool:
+    """
+    Detects the two red card backs in a seat's card_region.
+    Very rough: look for a lot of reddish, fairly bright pixels.
+    """
+    if img is None or img.size == 0:
+        return False
+
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    h, s, v = cv2.split(hsv)
+
+    # Red wraps around 0 deg, so we combine two ranges
+    red1 = (h <= 10)
+    red2 = (h >= 170)
+    red = (red1 | red2) & (s >= 80) & (v >= 60)
+
+    ratio = red.mean()
+    return ratio > 0.10  # tune; 0.1–0.2 usually works
+
+
+def board_card_present(img: np.ndarray) -> bool:
+    """
+    Detect if a *board* ROI actually has a card.
+    Board cards are white rectangular tiles; the felt + faded logo
+    alone should not pass this.
+    """
+    if img is None or img.size == 0:
+        return False
+
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    h, s, v = cv2.split(hsv)
+
+    # "White" pixels: high value, low saturation
+    white = (v >= 220) & (s <= 40)
+    ratio = white.mean()
+    return ratio > 0.12  # tune; this is quite conservative
+
 # ---------------------------------------------------------------------
 # Incremental OCR tracking
 # ---------------------------------------------------------------------
@@ -232,6 +290,8 @@ class TableTracker:
         self.prev_rois: Dict[Tuple[str, Optional[int]], Optional[np.ndarray]] = {}
         self.tasks: List[OcrTask] = []
         self.state: TableState = self._init_empty_state()
+
+        self.acting_seat_id: Optional[int] = None
 
     # ---- init ----
 
@@ -382,19 +442,25 @@ class TableTracker:
             s_label, s_score = scan_templates(gray, SUIT_TEMPLATES)
             card_str = f"{r_label}{s_label}"
             hero_cards.append(card_str)
-        # Filter out Nones
+
         self.state.hero_cards = [c for c in hero_cards if c is not None]
 
-        # Board cards
+        # Update hero seat has_cards flag
+        hero_seat = next((s for s in self.state.seats if s.is_hero), None)
+        if hero_seat is not None:
+            hero_seat.has_cards = len(self.state.hero_cards) == 2
+
+        # Board cards (now gate with board_card_present)
         board_cards_imgs: List[np.ndarray] = []
         board_cards: List[Optional[str]] = []
         for roi in cfg["board_cards"]:
             card_img = crop_roi(frame, roi)
             board_cards_imgs.append(card_img)
 
-            if not card_present(card_img):
+            if not board_card_present(card_img):
                 board_cards.append(None)
                 continue
+
             gray = prep_gray(card_img)
             r_label, r_score = scan_templates(gray, RANK_TEMPLATES)
             s_label, s_score = scan_templates(gray, SUIT_TEMPLATES)
@@ -404,10 +470,12 @@ class TableTracker:
         self.state.board_cards = [c for c in board_cards if c is not None]
         self.state.street = infer_street(board_cards_imgs)
 
+
     # ---- button, has_cards, active ----
 
     def _update_buttons_and_activity(self, frame: np.ndarray) -> None:
         self.state.button_seat = None
+        self.acting_seat_id = None  # recomputed each frame
 
         for seat_id, (seat, seat_cfg) in enumerate(
             zip(self.state.seats, self.cfg["seats"])
@@ -415,11 +483,28 @@ class TableTracker:
             card_region_img = crop_roi(frame, seat_cfg["card_region"])
             button_img = crop_roi(frame, seat_cfg["button_roi"])
 
-            seat.has_cards = roi_has_card(card_region_img)
+            # --- has_cards ---
+            if seat.is_hero:
+                # Hero: we rely on hero_cards detection (set below in _update_cards)
+                # here we just leave has_cards as-is; it'll be updated there.
+                pass
+            else:
+                # Non-hero: look specifically for two red back cards
+                seat.has_cards = has_back_cards(card_region_img)
+
+            # --- dealer button ---
             has_button = detect_button(button_img)
             if has_button:
                 self.state.button_seat = seat_id
 
+            # --- time bar / acting_seat ---
+            timebar_roi = seat_cfg.get("timebar_roi")
+            if timebar_roi is not None:
+                timebar_img = crop_roi(frame, timebar_roi)
+                if detect_time_bar(timebar_img):
+                    self.acting_seat_id = seat_id
+
+            # --- active? ---
             seat.is_active = seat.has_cards and not (
                 seat.last_status in ("fold",) or seat.is_sitting_out
             )
@@ -430,11 +515,16 @@ class TableTracker:
         hero = next((s for s in self.state.seats if s.is_hero), None)
         if hero is None:
             return False
+
+        # If we have a detected acting_seat_id and it matches hero, that's definitive.
+        if self.acting_seat_id is not None:
+            return self.acting_seat_id == hero.seat_id
+
+        # Fallback: old logical checks if we couldn't see the time bar.
         if hero.is_sitting_out or not hero.has_cards:
             return False
         if hero.last_status in ("fold", "allin"):
             return False
-        # Can tighten later using action-button ROI
         return True
 
     # ---- snapshot ----
