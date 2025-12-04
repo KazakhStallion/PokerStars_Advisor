@@ -9,9 +9,9 @@ import cv2
 import numpy as np
 import pytesseract
 
-from capture import load_config, ScreenCapture
-from models import SeatState, TableState
-from card_templates import load_all_templates, match_best_template
+from poker.capture import load_config, ScreenCapture
+from poker.models import SeatState, TableState
+from poker.card_templates import load_all_templates, match_best_template
 
 # Load rank / suit templates once at import
 RANK_TEMPLATES, SUIT_TEMPLATES = load_all_templates()
