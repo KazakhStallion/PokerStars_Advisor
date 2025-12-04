@@ -48,15 +48,16 @@ def main():
         bet_raw = ocr_text_fast(bet_img, "0123456789.,$", psm=7)
         bet_val = ocr_amount_fast(bet_img)
 
-        # Status (Fold, Call, Check, Bet, Raise, Sitting Out)
+        # Status (Fold, Call, Check, Bet, Raise, All In, Sitting Out)
         status_img = crop_roi(frame, seat_cfg["status_roi"])
-        status_norm, status_raw, sit_raw = get_seat_status(status_img, stack_img)
+        status_norm, status_raw, stack_status_raw = get_seat_status(status_img, stack_img)
 
         print(
             f"[seat {i} - {name}] "
             f"stack_raw='{stack_raw}' -> {stack_val} | "
             f"bet_raw='{bet_raw}' -> {bet_val} | "
-            f"status_raw='{status_raw}' -> {status_norm}"
+            f"status_raw='{status_raw}' "
+            f"(stack_status_raw='{stack_status_raw}') -> {status_norm}"
         )
 
         # cv2.imshow(f"{name}_stack", stack_img)

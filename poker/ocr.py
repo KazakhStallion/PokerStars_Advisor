@@ -17,7 +17,8 @@ from poker.card_templates import load_all_templates, match_best_template
 RANK_TEMPLATES, SUIT_TEMPLATES = load_all_templates()
 
 # Whitelist of lettters for Tesseract
-STATUS_WHITELIST = "ABCDEFGHIKLMNORSTUYabcdefghiklmnorstuy,.: "
+STATUS_WHITELIST = "ABCDEFGHIKLMNORSTUYabcdefghiklmnorstuy "
+STACK_STATUS_WHITELIST = "AaIiLlNnOoSsTtUu g-"
 
 ### ROI helpers
 
@@ -115,21 +116,18 @@ def infer_street(board_card_imgs: List[np.ndarray]) -> str:
 
 
 def get_seat_status(status_img, stack_img) -> tuple[str | None, str, str]:
-    # Primary status in the name/status area
+    # Normal action status from the status/name area
     status_raw = ocr_text_fast(status_img, STATUS_WHITELIST, psm=7)
     status_norm = normalize_status(status_raw)
 
-    if status_norm == "sit_out":
-        return status_norm, status_raw, ""
+    # Special statuses that only ever appear in the stack area
+    stack_status_raw = ocr_text_fast(stack_img, STACK_STATUS_WHITELIST, psm=7)
+    stack_status_norm = normalize_status(stack_status_raw)
 
-    # 2) Special case: 'Sitting Out' can appear where the stack usually is
-    stack_text_raw = ocr_text_fast(stack_img, "SgintuO ", psm=7)  # minimal letters for 'Sitting Out'
-    stack_status_norm = normalize_status(stack_text_raw)
+    if stack_status_norm in ("sit_out", "all_in"):
+        return stack_status_norm, status_raw, stack_status_raw
 
-    if stack_status_norm == "sit_out":
-        return stack_status_norm, status_raw, stack_text_raw
-
-    return status_norm, status_raw, stack_text_raw
+    return status_norm, status_raw, stack_status_raw
 
 
 ### Card template matching
