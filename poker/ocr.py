@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 import time
+import datetime
 from dataclasses import dataclass, asdict
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -23,7 +24,7 @@ STATUS_WHITELIST = "ABCDEFGHIKLMNORSTUYabcdefghiklmnorstuy "
 STACK_STATUS_WHITELIST = "AaIiLlNnOoSsTtUu g-"
 
 # ---------------------------------------------------------------------
-# ROI / OCR helpers (identical behavior to test_tesseract)
+# ROI / OCR helpers
 # ---------------------------------------------------------------------
 
 def crop_roi(frame: np.ndarray, roi: List[int]) -> np.ndarray:
@@ -38,7 +39,7 @@ def preprocess_for_ocr(img: np.ndarray) -> np.ndarray:
     return th
 
 
-BASE_CONFIG = "--oem 1"  # LSTM-only, same as tests
+BASE_CONFIG = "--oem 1"  # LSTM-only
 
 
 def ocr_text_fast(img, whitelist: str, psm: int = 7) -> str:
@@ -49,12 +50,6 @@ def ocr_text_fast(img, whitelist: str, psm: int = 7) -> str:
 
 
 def ocr_amount_fast(img, max_reasonable: float = 100000.0):
-    """
-    Exactly the same flow as test_tesseract:
-      - chars-only whitelist
-      - parse first number
-      - clamp by max_reasonable
-    """
     txt = ocr_text_fast(img, "0123456789.,$", psm=7)
     txt = txt.replace(",", "").replace("$", "")
 
@@ -451,9 +446,30 @@ class TableTracker:
 # Main loop
 # ---------------------------------------------------------------------
 
-def write_state_json(state: TableState, path: str = "current_state.json") -> None:
+def write_state_json(state: TableState, path: str) -> None:
     with open(path, "w", encoding="utf-8") as f:
         json.dump(asdict(state), f, indent=2)
+
+
+def log_game_state(state: TableState,
+                   frame: np.ndarray,
+                   base_dir: str = "logs") -> None:
+    """
+    Save a single 'GTO-ready' snapshot:
+      - JSON table state
+      - Corresponding frame PNG (for debugging / replay)
+    """
+    os.makedirs(base_dir, exist_ok=True)
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    json_path = os.path.join(base_dir, f"state_{ts}.json")
+    img_path = os.path.join(base_dir, f"frame_{ts}.png")
+
+    write_state_json(state, json_path)
+    cv2.imwrite(img_path, frame)
+
+    print(f"[LOG] Saved game state -> {json_path}")
+    print(f"[LOG] Saved frame      -> {img_path}")
 
 
 def main():
@@ -464,9 +480,11 @@ def main():
     TARGET_FPS = 10
     FRAME_DELAY = 1.0 / TARGET_FPS
 
-    print("Press 'q' to quit, 'r' to force full resync, 's' to dump JSON.")
+    print("Press 'q' to quit, 'r' to force full resync, 's' to log snapshot.")
 
     frame_idx = 0
+    prev_hero_to_act = False  # for rising-edge detection
+
     while True:
         start = time.time()
         frame = cap.grab_table_frame()
@@ -509,15 +527,19 @@ def main():
             tracker.tasks.clear()
             print("[INFO] Forced full resync.")
         elif key == ord("s"):
-            write_state_json(tracker.snapshot())
-            print("[INFO] Wrote current_state.json")
+            # Manual snapshot
+            log_game_state(tracker.snapshot(), frame)
+            print("[INFO] Manual snapshot logged.")
 
-        # Optional: automatic send to GTO when hero_to_act
-        if tracker.hero_to_act():
-            # For now just a hook
-            # write_state_json(tracker.snapshot(), "current_state.json")
-            # call_solver("current_state.json")
-            pass
+        # Automatic snapshot: right when it becomes hero's turn (rising edge)
+        hero_now = tracker.hero_to_act()
+        if hero_now and not prev_hero_to_act:
+            # This is the moment you'd pipeline into GTO:
+            log_game_state(tracker.snapshot(), frame)
+            print("[INFO] Hero to act -> game state logged (GTO input).")
+            # TODO: call your solver here, passing the JSON path if needed.
+
+        prev_hero_to_act = hero_now
 
         frame_idx += 1
 
