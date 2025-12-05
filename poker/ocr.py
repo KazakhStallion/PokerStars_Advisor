@@ -69,7 +69,7 @@ def ocr_amount_fast(img, max_reasonable: float = 100000.0):
 # ---------------------------------------------------------------------
 # Status / street helpers
 
-def roi_has_card(img: np.ndarray, var_thresh: float = 200.0) -> bool:
+def roi_has_card(img: np.ndarray, var_thresh: float = 500.0) -> bool:
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     return float(gray.var()) > var_thresh
 
