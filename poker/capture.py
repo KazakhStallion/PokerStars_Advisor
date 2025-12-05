@@ -9,12 +9,18 @@ from mss import mss
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config_pokerstars.json")
 
-# Absolute screen coords of the PokerStars table window
-TABLE_LEFT = 959     # pixels from left edge of monitor
-TABLE_TOP = 603      # pixels from top edge of monitor
-TABLE_WIDTH = 1429   # window width in pixels
-TABLE_HEIGHT = 985   # window height in pixels
+# !!! CHANGE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Absolute screen coords of the PokerStars table window #!!!
+TABLE_LEFT = 959     # pixels from left edge of monitor #!!!
+TABLE_TOP = 603      # pixels from top edge of monitor  #!!!
+TABLE_WIDTH = 1429   # window width in pixels           #!!!
+TABLE_HEIGHT = 985   # window height in pixels          #!!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+# !!! DO NOT CHANGE !!!!!!!!!
+BASE_TABLE_WIDTH = 1429 # !!!
+BASE_TABLE_HEIGHT = 985 # !!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 def load_config() -> Dict[str, Any]:
     with open(CONFIG_PATH, "r") as f:

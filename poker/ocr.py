@@ -14,7 +14,7 @@ import pytesseract
 import json
 import copy
 
-from poker.capture import load_config, ScreenCapture
+from poker.capture import load_config, ScreenCapture, BASE_TABLE_WIDTH, BASE_TABLE_HEIGHT
 from poker.models import SeatState, TableState
 from poker.card_templates import load_all_templates
 
@@ -30,8 +30,17 @@ STACK_STATUS_WHITELIST = "AaIiLlNnOoSsTtUu g-"
 
 def crop_roi(frame: np.ndarray, roi: List[int]) -> np.ndarray:
     x, y, w, h = roi
-    return frame[y : y + h, x : x + w].copy()
 
+    fh, fw = frame.shape[:2]          # actual captured size
+    sx = fw / float(BASE_TABLE_WIDTH)
+    sy = fh / float(BASE_TABLE_HEIGHT)
+
+    x = int(round(x * sx))
+    y = int(round(y * sy))
+    w = int(round(w * sx))
+    h = int(round(h * sy))
+
+    return frame[y : y + h, x : x + w]
 
 def preprocess_for_ocr(img: np.ndarray) -> np.ndarray:
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
