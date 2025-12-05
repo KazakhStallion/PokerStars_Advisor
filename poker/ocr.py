@@ -610,9 +610,8 @@ def main():
     print("Press 'q' to quit, 'r' to force full resync, 's' to log snapshot.")
 
     frame_idx = 0
-    prev_hero_to_act = False
-    prehero_state: Optional[TableState] = None
-    prehero_frame: Optional[np.ndarray] = None
+    prev_br_to_act = False  # track bottom_right rising edge
+
 
     while True:
         start = time.time()
@@ -621,23 +620,34 @@ def main():
         # Default: light OCR
         max_tasks = 6
 
-        # Is it bottom_right's turn?
-        br_to_act = (bottom_right_id is not None and tracker.acting_seat_id == bottom_right_id)
-
-        if br_to_act:
-            # We have time while villain thinks → OCR harder
-            max_tasks = 30  # or more, tune as you like
+        # bottom_right acting state from previous frame
+        br_to_act_prev = (
+            bottom_right_id is not None
+            and tracker.acting_seat_id == bottom_right_id
+        )
+        if br_to_act_prev:
+            # while villain tanks we can afford more OCR
+            max_tasks = 30
 
         tracker.update(frame, max_tasks_per_frame=max_tasks)
         state = tracker.state
 
-        # After update, recompute acting seat
-        br_to_act = (tracker.acting_seat_id == bottom_right_id)
+        # bottom_right acting state after this update
+        br_to_act = (
+            bottom_right_id is not None
+            and tracker.acting_seat_id == bottom_right_id
+        )
 
-        # While bottom_right is acting, keep a fresh pre-hero snapshot buffer
-        if br_to_act:
-            prehero_state = tracker.snapshot_copy()
-            prehero_frame = frame.copy()
+        # RISING EDGE: it just became the player before hero's turn
+        if br_to_act and not prev_br_to_act:
+            # Optionally drain remaining OCR tasks once
+            tracker.update(frame, max_tasks_per_frame=999)
+
+            state_for_log = tracker.snapshot_copy()
+            frame_for_log = frame.copy()
+
+            log_game_state(state_for_log, frame_for_log, tag="prehero")
+            print("[INFO] bottom_right to act -> logged snapshot for GoT input.")
 
         # Debug overlay
         debug = frame.copy()
@@ -681,16 +691,16 @@ def main():
         # Automatic snapshot: right when it becomes bottom_right seat's turn (rising edge)
         hero_now = tracker.hero_to_act()
 
-        if hero_now and not prev_hero_to_act:
-            # Prefer the state captured while bottom_right was thinking
-            state_for_log = prehero_state if prehero_state is not None else tracker.snapshot_copy()
-            frame_for_log = prehero_frame if prehero_frame is not None else frame.copy()
+        if br_to_act and not prev_br_to_act:
+            # Rising edge: bottom_right just got the timer → snapshot immediately
+            tracker.update(frame, max_tasks_per_frame=999)  # optional OCR drain
+            state_for_log = tracker.snapshot_copy()
+            frame_for_log = frame.copy()
 
-            log_game_state(state_for_log, frame_for_log, tag="hero")
-            print("[INFO] Hero to act -> logged buffered pre-hero snapshot.")
-            # TODO Trigger GoT
+            log_game_state(state_for_log, frame_for_log, tag="prehero")
+            print("[INFO] bottom_right to act -> logged snapshot for GoT input.")
 
-        prev_hero_to_act = hero_now
+        prev_br_to_act = br_to_act
 
         frame_idx += 1
 
