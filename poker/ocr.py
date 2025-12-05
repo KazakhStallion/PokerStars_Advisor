@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 import pytesseract
 import json
+import copy
 
 from poker.capture import load_config, ScreenCapture
 from poker.models import SeatState, TableState
@@ -26,7 +27,6 @@ STACK_STATUS_WHITELIST = "AaIiLlNnOoSsTtUu g-"
 
 # ---------------------------------------------------------------------
 # ROI / OCR helpers
-# ---------------------------------------------------------------------
 
 def crop_roi(frame: np.ndarray, roi: List[int]) -> np.ndarray:
     x, y, w, h = roi
@@ -66,31 +66,8 @@ def ocr_amount_fast(img, max_reasonable: float = 100000.0):
         return None
     return val
 
-
-def detect_time_bar(img: np.ndarray) -> bool:
-    """
-    Detect the yellow→green action timer bar.
-    It is a saturated yellow/green strip on dark background.
-    """
-    if img is None or img.size == 0:
-        return False
-
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    h, s, v = cv2.split(hsv)
-
-    # Hue ~20–90 (yellow to green), decent saturation and brightness
-    mask = (
-        (h >= 20) & (h <= 90) &
-        (s >= 80) &
-        (v >= 80)
-    )
-
-    ratio = mask.mean()  # fraction of pixels
-    return ratio > 0.15  # tune this if needed
-
 # ---------------------------------------------------------------------
-# Status / street helpers (same as before; used in test_tesseract)
-# ---------------------------------------------------------------------
+# Status / street helpers
 
 def roi_has_card(img: np.ndarray, var_thresh: float = 200.0) -> bool:
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -143,12 +120,6 @@ def infer_street(board_card_imgs: List[np.ndarray]) -> str:
 
 
 def get_seat_status(status_img, stack_img) -> tuple[Optional[str], str, str]:
-    """
-    Exact behavior used by test_tesseract:
-      - action status from status_roi with STATUS_WHITELIST
-      - special statuses from stack ROI with STACK_STATUS_WHITELIST
-      - prefer special if sit_out / allin
-    """
     status_raw = ocr_text_fast(status_img, STATUS_WHITELIST, psm=7)
     status_norm = normalize_status(status_raw)
 
@@ -186,7 +157,6 @@ def dealer_button_score(img: np.ndarray) -> float:
     )
     red_ratio = red_mask.mean()
 
-    # Button has both: combine as product
     return float(white_ratio * red_ratio)
 
 
@@ -206,12 +176,11 @@ def detect_time_bar(img: np.ndarray) -> bool:
         (s >= 80) &
         (v >= 80)
     )
-    return float(mask.mean()) > 0.10   # tweak if needed
+    return float(mask.mean()) > 0.10
 
 
 # ---------------------------------------------------------------------
-# Card template matching (exactly like test_card_templates)
-# ---------------------------------------------------------------------
+# Card template matching
 
 def card_present(img, var_thresh: float = 150.0) -> bool:
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -228,11 +197,6 @@ def prep_gray(img: np.ndarray) -> np.ndarray:
 
 
 def scan_templates(roi_gray: np.ndarray, templates: dict[str, np.ndarray]):
-    """
-    Same logic as test_card_templates:
-      - resize template if needed
-      - TM_CCOEFF_NORMED, take max score
-    """
     best_label = "?"
     best_score = -1.0
 
@@ -272,20 +236,19 @@ def has_back_cards(img: np.ndarray) -> bool:
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     h, s, v = cv2.split(hsv)
 
-    # Red wraps around 0 deg, so we combine two ranges
     red1 = (h <= 10)
     red2 = (h >= 170)
     red = (red1 | red2) & (s >= 80) & (v >= 60)
 
     ratio = red.mean()
-    return ratio > 0.10  # tune; 0.1–0.2 usually works
+    return ratio > 0.10  
 
 
 def board_card_present(img: np.ndarray) -> bool:
     """
     Detect if a *board* ROI actually has a card.
-    Board cards are white rectangular tiles; the felt + faded logo
-    alone should not pass this.
+    Board cards are white rectangular tiles; 
+    the felt + faded logo alone should not pass this.
     """
     if img is None or img.size == 0:
         return False
@@ -296,11 +259,11 @@ def board_card_present(img: np.ndarray) -> bool:
     # "White" pixels: high value, low saturation
     white = (v >= 220) & (s <= 40)
     ratio = white.mean()
-    return ratio > 0.12  # tune; this is quite conservative
+    return ratio > 0.12
+
 
 # ---------------------------------------------------------------------
 # Incremental OCR tracking
-# ---------------------------------------------------------------------
 
 def gray_simple(img: np.ndarray) -> np.ndarray:
     if img.ndim == 3:
@@ -329,8 +292,7 @@ class OcrTask:
 class TableTracker:
     """
     Maintains a cached TableState.
-    Uses ROI diffing + a small OCR task queue.
-    Card & Tesseract flows are identical to the test scripts.
+    Uses ROI diffing & small OCR task queue.
     """
 
     def __init__(self, cfg: Dict[str, Any]):
@@ -340,12 +302,11 @@ class TableTracker:
         self.state: TableState = self._init_empty_state()
         self.acting_seat_id: Optional[int] = None
 
-    # ---- init ----
-
+    # init
     def _init_empty_state(self) -> TableState:
         seats: List[SeatState] = []
         for seat_id, seat_cfg in enumerate(self.cfg["seats"]):
-            is_hero = seat_id == 0  # adjust if hero is elsewhere
+            is_hero = seat_id == 0
             seat_state = SeatState(
                 seat_id=seat_id,
                 name=seat_cfg["name"],
@@ -370,7 +331,9 @@ class TableTracker:
             seats=seats,
         )
 
-    # ---- per-frame update ----
+
+
+    # per-frame update
 
     def update(self, frame: np.ndarray, max_tasks_per_frame: int = 6) -> None:
         self._enqueue_changed_rois(frame)
@@ -378,7 +341,9 @@ class TableTracker:
         self._update_cards_and_street(frame)
         self._update_buttons_and_activity(frame)
 
-    # ---- task scheduling ----
+
+
+    # task scheduling
 
     def _enqueue_changed_rois(self, frame: np.ndarray) -> None:
         # Pot + total pot
@@ -430,7 +395,7 @@ class TableTracker:
             task = self.tasks.pop(0)
             self._run_task(frame, task)
 
-    # ---- OCR handlers ----
+    # OCR handlers
 
     def _run_task(self, frame: np.ndarray, task: OcrTask) -> None:
         img = crop_roi(frame, task.roi)
@@ -452,7 +417,7 @@ class TableTracker:
         elif task.kind == "seat_bet":
             seat = self.state.seats[task.seat_idx]
             g = gray_simple(img)
-            if g.mean() < 10:  # heuristic: empty bet area
+            if g.mean() < 10:
                 seat.bet = None
             else:
                 seat.bet = ocr_amount_fast(img)
@@ -472,7 +437,9 @@ class TableTracker:
             )
             seat.is_sitting_out = status_norm == "sit_out"
 
-    # ---- cards + street (process identical to test_card_templates) ----
+
+
+    # cards + street
 
     def _update_cards_and_street(self, frame: np.ndarray) -> None:
         cfg = self.cfg
@@ -518,16 +485,10 @@ class TableTracker:
         self.state.street = infer_street(board_cards_imgs)
 
 
-    # ---- button, has_cards, active ----
+    
+    # button, has_cards, active
 
     def _update_buttons_and_activity(self, frame: np.ndarray) -> None:
-        """
-        Per-seat visual updates that don't require Tesseract:
-          - has_cards (variance-based for now)
-          - dealer button (white+red chip)
-          - acting_seat_id (time bar; currently only bottom_right has timebar_roi)
-          - is_active flag
-        """
         self.state.button_seat = None
         self.acting_seat_id = None
 
@@ -537,11 +498,10 @@ class TableTracker:
         for seat_id, (seat, seat_cfg) in enumerate(
             zip(self.state.seats, self.cfg["seats"])
         ):
-            # --- has_cards: keep your existing heuristic here ---
             card_region_img = crop_roi(frame, seat_cfg["card_region"])
             seat.has_cards = roi_has_card(card_region_img)
 
-            # --- dealer button detection (global max over seats) ---
+            # dealer button detection
             btn_roi = seat_cfg.get("button_roi")
             if btn_roi:
                 btn_img = crop_roi(frame, btn_roi)
@@ -550,26 +510,26 @@ class TableTracker:
                     best_button_score = score
                     best_button_seat = seat_id
 
-            # --- time bar / acting seat (bottom_right has the only timebar_roi for now) ---
+            # time bar / acting seat (bottom_right has the only timebar_roi for now)
             tb_roi = seat_cfg.get("timebar_roi")
             if tb_roi:
                 tb_img = crop_roi(frame, tb_roi)
                 if detect_time_bar(tb_img):
                     self.acting_seat_id = seat_id
 
-            # --- is_active logic stays the same ---
             seat.is_active = seat.has_cards and not (
                 seat.last_status in ("fold",) or seat.is_sitting_out
             )
 
         # Finalize dealer seat after scanning all seats
-        if best_button_score > 0.01:   # threshold from your test script
+        if best_button_score > 0.01:
             self.state.button_seat = best_button_seat
         else:
             self.state.button_seat = None
 
 
-    # ---- hero-to-act heuristic ----
+
+    # hero-to-act
 
     def hero_to_act(self) -> bool:
         hero = next((s for s in self.state.seats if s.is_hero), None)
@@ -587,15 +547,18 @@ class TableTracker:
             return False
         return True
 
-    # ---- snapshot ----
-
+    
+    # Ssnapshot
     def snapshot(self) -> TableState:
         return self.state
+    
+    def snapshot_copy(self) -> TableState:
+        """Deep copy so future updates don’t mutate the saved snapshot."""
+        return copy.deepcopy(self.state)
 
 
 # ---------------------------------------------------------------------
 # Main loop
-# ---------------------------------------------------------------------
 
 def write_state_json(state: TableState, path: str) -> None:
     with open(path, "w", encoding="utf-8") as f:
@@ -604,7 +567,8 @@ def write_state_json(state: TableState, path: str) -> None:
 
 def log_game_state(state: TableState,
                    frame: np.ndarray,
-                   base_dir: str = "logs") -> None:
+                   base_dir: str = "logs",
+                   tag: str = "") -> None:
     """
     Save a single 'GTO-ready' snapshot:
       - JSON table state
@@ -613,8 +577,10 @@ def log_game_state(state: TableState,
     os.makedirs(base_dir, exist_ok=True)
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    json_path = os.path.join(base_dir, f"state_{ts}.json")
-    img_path = os.path.join(base_dir, f"frame_{ts}.png")
+    prefix = f"{tag}_" if tag else ""
+
+    json_path = os.path.join(base_dir, f"{prefix}state_{ts}.json")
+    img_path = os.path.join(base_dir, f"{prefix}frame_{ts}.png")
 
     write_state_json(state, json_path)
     cv2.imwrite(img_path, frame)
@@ -623,10 +589,20 @@ def log_game_state(state: TableState,
     print(f"[LOG] Saved frame      -> {img_path}")
 
 
-def main():
+def main():    
     cfg = load_config()
     cap = ScreenCapture(cfg)
     tracker = TableTracker(cfg)
+
+    # find bottom_right seat
+    bottom_right_id = None
+    for i, seat_cfg in enumerate(cfg["seats"]):
+        if seat_cfg["name"] == "bottom_right":
+            bottom_right_id = i
+            break
+
+    if bottom_right_id is None:
+        print("[WARN] bottom_right seat not found in config; buffering disabled.")
 
     TARGET_FPS = 10
     FRAME_DELAY = 1.0 / TARGET_FPS
@@ -634,14 +610,34 @@ def main():
     print("Press 'q' to quit, 'r' to force full resync, 's' to log snapshot.")
 
     frame_idx = 0
-    prev_hero_to_act = False  # for rising-edge detection
+    prev_hero_to_act = False
+    prehero_state: Optional[TableState] = None
+    prehero_frame: Optional[np.ndarray] = None
 
     while True:
         start = time.time()
         frame = cap.grab_table_frame()
 
-        tracker.update(frame, max_tasks_per_frame=6)
+        # Default: light OCR
+        max_tasks = 6
+
+        # Is it bottom_right's turn?
+        br_to_act = (bottom_right_id is not None and tracker.acting_seat_id == bottom_right_id)
+
+        if br_to_act:
+            # We have time while villain thinks → OCR harder
+            max_tasks = 30  # or more, tune as you like
+
+        tracker.update(frame, max_tasks_per_frame=max_tasks)
         state = tracker.state
+
+        # After update, recompute acting seat
+        br_to_act = (tracker.acting_seat_id == bottom_right_id)
+
+        # While bottom_right is acting, keep a fresh pre-hero snapshot buffer
+        if br_to_act:
+            prehero_state = tracker.snapshot_copy()
+            prehero_frame = frame.copy()
 
         # Debug overlay
         debug = frame.copy()
@@ -682,13 +678,17 @@ def main():
             log_game_state(tracker.snapshot(), frame)
             print("[INFO] Manual snapshot logged.")
 
-        # Automatic snapshot: right when it becomes hero's turn (rising edge)
+        # Automatic snapshot: right when it becomes bottom_right seat's turn (rising edge)
         hero_now = tracker.hero_to_act()
+
         if hero_now and not prev_hero_to_act:
-            # This is the moment you'd pipeline into GTO:
-            log_game_state(tracker.snapshot(), frame)
-            print("[INFO] Hero to act -> game state logged (GTO input).")
-            # TODO: call your solver here, passing the JSON path if needed.
+            # Prefer the state captured while bottom_right was thinking
+            state_for_log = prehero_state if prehero_state is not None else tracker.snapshot_copy()
+            frame_for_log = prehero_frame if prehero_frame is not None else frame.copy()
+
+            log_game_state(state_for_log, frame_for_log, tag="hero")
+            print("[INFO] Hero to act -> logged buffered pre-hero snapshot.")
+            # TODO Trigger GoT
 
         prev_hero_to_act = hero_now
 
