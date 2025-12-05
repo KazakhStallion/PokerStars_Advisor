@@ -353,7 +353,7 @@ class TableTracker:
             prev = self.prev_rois.get((key, None))
             if roi_changed(prev, img):
                 self.prev_rois[(key, None)] = gray_simple(img)
-                self._add_task(key, None, key, roi)
+                self._add_task_front(key, None, key, roi)
 
         # Seats
         for seat_idx, seat_cfg in enumerate(self.cfg["seats"]):
@@ -388,6 +388,16 @@ class TableTracker:
                   roi: List[int]) -> None:
         self.tasks.append(OcrTask(kind=kind, seat_idx=seat_idx,
                                   roi_key=roi_key, roi=roi))
+    
+    def _add_task_front(self,
+                        kind: str,
+                        seat_idx: Optional[int],
+                        roi_key: str,
+                        roi: List[int]) -> None:
+        # High-priority task: insert at front of queue
+        self.tasks.insert(0, OcrTask(kind=kind, seat_idx=seat_idx,
+                                     roi_key=roi_key, roi=roi))
+
 
     def _run_some_tasks(self, frame: np.ndarray, max_tasks: int) -> None:
         n = min(max_tasks, len(self.tasks))
