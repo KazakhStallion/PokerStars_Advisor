@@ -13,10 +13,15 @@ import numpy as np
 import pytesseract
 import json
 import copy
+from pathlib import Path
 
 from poker.capture import load_config, ScreenCapture
 from poker.models import SeatState, TableState
 from poker.card_templates import load_all_templates
+from poker.simple_evaluator import (
+    evaluate_hero_hand,
+    print_hero_equity_vs_random_hand,
+)
 
 # Load rank & suit templates (same as test_card_templates)
 RANK_TEMPLATES, SUIT_TEMPLATES = load_all_templates()
@@ -330,8 +335,7 @@ class TableTracker:
             button_seat=None,
             seats=seats,
         )
-
-
+    
 
     # per-frame update
 
@@ -593,7 +597,61 @@ def log_game_state(state: TableState,
 
     print(f"[LOG] Saved game state -> {json_path}")
     print(f"[LOG] Saved frame      -> {img_path}")
+    
+    run_simple_evaluator_from_json(json_path)
 
+
+def extract_state_from_json(
+    json_path: str,
+) -> Tuple[List[str], List[str], List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """
+    Read a GameState JSON file and extract:
+      - hero_cards:   e.g. ["As", "Kd"]
+      - board_cards:  e.g. ["7h", "8h", "9h"]
+      - seats:        raw seat dicts from JSON
+      - active_seats: subset where is_active == True
+    """
+    path = Path(json_path)
+
+    with path.open("r", encoding="utf-8") as f:
+        state = json.load(f)
+
+    hero_cards: List[str] = state.get("hero_cards", [])
+    board_cards: List[str] = state.get("board_cards", [])
+    seats: List[Dict[str, Any]] = state.get("seats", [])
+
+    active_seats = [s for s in seats if s.get("is_active", False)]
+
+    return hero_cards, board_cards, seats, active_seats
+
+
+def run_simple_evaluator_from_json(json_path: str, iterations: int = 50_000) -> None:
+    """
+    Use a GameState JSON snapshot as input to simple_evaluator.
+
+    - num_players is set to the number of *currently active* players
+      (including hero), i.e. len(active_seats).
+    """
+    (
+        hero_cards,
+        board_cards,
+        seats,
+        active_seats,
+    ) = extract_state_from_json(json_path)
+
+    num_players = len(active_seats)
+
+    # 1) Print current made hand
+    evaluate_hero_hand(hero_cards, board_cards)
+
+    # 2) Print hero equity vs random opponents at an N-handed table,
+    #    where N = current active players (hero + random villains).
+    print_hero_equity_vs_random_hand(
+        hero_cards,
+        board_cards,
+        num_players=num_players,
+        iterations=iterations,
+    )
 
 def main():    
     cfg = load_config()
