@@ -5,7 +5,7 @@ import numpy as np
 
 from poker.capture import load_config, ScreenCapture
 from poker.card_templates import load_all_templates
-from poker.ocr import crop_roi, card_present, prep_gray, scan_templates
+from poker.ocr import crop_roi, card_present, prep_gray, scan_templates, has_back_cards, board_card_present
 
 
 def main():

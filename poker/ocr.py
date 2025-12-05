@@ -161,6 +161,54 @@ def get_seat_status(status_img, stack_img) -> tuple[Optional[str], str, str]:
     return status_norm, status_raw, stack_status_raw
 
 
+def dealer_button_score(img: np.ndarray) -> float:
+    """
+    Score how likely this ROI contains the PokerStars dealer button:
+    white circle + red spade.
+
+    Returns a value in [0, 1]. Higher = more likely.
+    """
+    if img is None or img.size == 0:
+        return 0.0
+
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    h, s, v = cv2.split(hsv)
+
+    # White ring (bright / low saturation)
+    white_mask = (v >= 200) & (s <= 40)
+    white_ratio = white_mask.mean()
+
+    # Red spade (strong red, high sat, decent brightness)
+    red_mask = (
+        ((h <= 10) | (h >= 170)) &
+        (s >= 90) &
+        (v >= 80)
+    )
+    red_ratio = red_mask.mean()
+
+    # Button has both: combine as product
+    return float(white_ratio * red_ratio)
+
+
+def detect_time_bar(img: np.ndarray) -> bool:
+    """
+    Detect the yellow→green time bar in the given ROI.
+    Used only for bottom_right.timebar_roi (for now).
+    """
+    if img is None or img.size == 0:
+        return False
+
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    h, s, v = cv2.split(hsv)
+
+    mask = (
+        (h >= 20) & (h <= 90) &   # yellow/green hue
+        (s >= 80) &
+        (v >= 80)
+    )
+    return float(mask.mean()) > 0.10   # tweak if needed
+
+
 # ---------------------------------------------------------------------
 # Card template matching (exactly like test_card_templates)
 # ---------------------------------------------------------------------
@@ -290,7 +338,6 @@ class TableTracker:
         self.prev_rois: Dict[Tuple[str, Optional[int]], Optional[np.ndarray]] = {}
         self.tasks: List[OcrTask] = []
         self.state: TableState = self._init_empty_state()
-
         self.acting_seat_id: Optional[int] = None
 
     # ---- init ----
@@ -474,40 +521,53 @@ class TableTracker:
     # ---- button, has_cards, active ----
 
     def _update_buttons_and_activity(self, frame: np.ndarray) -> None:
+        """
+        Per-seat visual updates that don't require Tesseract:
+          - has_cards (variance-based for now)
+          - dealer button (white+red chip)
+          - acting_seat_id (time bar; currently only bottom_right has timebar_roi)
+          - is_active flag
+        """
         self.state.button_seat = None
-        self.acting_seat_id = None  # recomputed each frame
+        self.acting_seat_id = None
+
+        best_button_score = 0.0
+        best_button_seat: Optional[int] = None
 
         for seat_id, (seat, seat_cfg) in enumerate(
             zip(self.state.seats, self.cfg["seats"])
         ):
+            # --- has_cards: keep your existing heuristic here ---
             card_region_img = crop_roi(frame, seat_cfg["card_region"])
-            button_img = crop_roi(frame, seat_cfg["button_roi"])
+            seat.has_cards = roi_has_card(card_region_img)
 
-            # --- has_cards ---
-            if seat.is_hero:
-                # Hero: we rely on hero_cards detection (set below in _update_cards)
-                # here we just leave has_cards as-is; it'll be updated there.
-                pass
-            else:
-                # Non-hero: look specifically for two red back cards
-                seat.has_cards = has_back_cards(card_region_img)
+            # --- dealer button detection (global max over seats) ---
+            btn_roi = seat_cfg.get("button_roi")
+            if btn_roi:
+                btn_img = crop_roi(frame, btn_roi)
+                score = dealer_button_score(btn_img)
+                if score > best_button_score:
+                    best_button_score = score
+                    best_button_seat = seat_id
 
-            # --- dealer button ---
-            has_button = detect_button(button_img)
-            if has_button:
-                self.state.button_seat = seat_id
-
-            # --- time bar / acting_seat ---
-            timebar_roi = seat_cfg.get("timebar_roi")
-            if timebar_roi is not None:
-                timebar_img = crop_roi(frame, timebar_roi)
-                if detect_time_bar(timebar_img):
+            # --- time bar / acting seat (bottom_right has the only timebar_roi for now) ---
+            tb_roi = seat_cfg.get("timebar_roi")
+            if tb_roi:
+                tb_img = crop_roi(frame, tb_roi)
+                if detect_time_bar(tb_img):
                     self.acting_seat_id = seat_id
 
-            # --- active? ---
+            # --- is_active logic stays the same ---
             seat.is_active = seat.has_cards and not (
                 seat.last_status in ("fold",) or seat.is_sitting_out
             )
+
+        # Finalize dealer seat after scanning all seats
+        if best_button_score > 0.01:   # threshold from your test script
+            self.state.button_seat = best_button_seat
+        else:
+            self.state.button_seat = None
+
 
     # ---- hero-to-act heuristic ----
 
