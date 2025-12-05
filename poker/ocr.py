@@ -15,7 +15,7 @@ import json
 import copy
 from pathlib import Path
 
-from poker.capture import load_config, ScreenCapture
+from poker.capture import load_config, ScreenCapture, BASE_TABLE_WIDTH, BASE_TABLE_HEIGHT
 from poker.models import SeatState, TableState
 from poker.card_templates import load_all_templates
 from poker.simple_evaluator import (
@@ -35,8 +35,17 @@ STACK_STATUS_WHITELIST = "AaIiLlNnOoSsTtUu g-"
 
 def crop_roi(frame: np.ndarray, roi: List[int]) -> np.ndarray:
     x, y, w, h = roi
-    return frame[y : y + h, x : x + w].copy()
+    fh, fw = frame.shape[:2]
 
+    sx = fw / BASE_TABLE_WIDTH
+    sy = fh / BASE_TABLE_HEIGHT
+
+    x = int(round(x * sx))
+    y = int(round(y * sy))
+    w = int(round(w * sx))
+    h = int(round(h * sy))
+
+    return frame[y:y+h, x:x+w]
 
 def preprocess_for_ocr(img: np.ndarray) -> np.ndarray:
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -74,7 +83,7 @@ def ocr_amount_fast(img, max_reasonable: float = 100000.0):
 # ---------------------------------------------------------------------
 # Status / street helpers
 
-def roi_has_card(img: np.ndarray, var_thresh: float = 200.0) -> bool:
+def roi_has_card(img: np.ndarray, var_thresh: float = 500.0) -> bool:
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     return float(gray.var()) > var_thresh
 
@@ -335,7 +344,7 @@ class TableTracker:
             button_seat=None,
             seats=seats,
         )
-    
+
 
     # per-frame update
 
@@ -357,7 +366,7 @@ class TableTracker:
             prev = self.prev_rois.get((key, None))
             if roi_changed(prev, img):
                 self.prev_rois[(key, None)] = gray_simple(img)
-                self._add_task(key, None, key, roi)
+                self._add_task_front(key, None, key, roi)
 
         # Seats
         for seat_idx, seat_cfg in enumerate(self.cfg["seats"]):
@@ -392,6 +401,16 @@ class TableTracker:
                   roi: List[int]) -> None:
         self.tasks.append(OcrTask(kind=kind, seat_idx=seat_idx,
                                   roi_key=roi_key, roi=roi))
+    
+    def _add_task_front(self,
+                        kind: str,
+                        seat_idx: Optional[int],
+                        roi_key: str,
+                        roi: List[int]) -> None:
+        # High-priority task: insert at front of queue
+        self.tasks.insert(0, OcrTask(kind=kind, seat_idx=seat_idx,
+                                     roi_key=roi_key, roi=roi))
+
 
     def _run_some_tasks(self, frame: np.ndarray, max_tasks: int) -> None:
         n = min(max_tasks, len(self.tasks))
@@ -693,21 +712,32 @@ def main():
             and tracker.acting_seat_id == hero_seat_id
         )
 
-        # ---------- Automatic snapshot: hero timebar rising edge ----------
+        # Automatic snapshot: hero timebar rising edge
         if hero_bar_now and not prev_hero_bar and hero_seat_id is not None:
-            # One snapshot per street (flop/turn/river)
             if state.street != last_logged_street:
-                # Make sure state is fully updated for THIS frame
+                # Apply all queued OCR for THIS frame
                 tracker.drain_all_tasks(frame)
+                state = tracker.state
                 state_fresh = tracker.snapshot_copy()
                 frame_fresh = frame.copy()
 
-                log_game_state(state_fresh, frame_fresh, tag=state.street)
-                print(f"[INFO] hero_bottom timebar ON on {state.street} -> logged snapshot for GoT input.")
+                # re-OCR of pot
+                pot_img = crop_roi(frame_fresh, cfg["pot_text"])
+                pot_val = ocr_amount_fast(pot_img)
+                if pot_val is not None:
+                    state_fresh.pot_size = pot_val
 
+                total_img = crop_roi(frame_fresh, cfg["total_pot_text"])
+                total_val = ocr_amount_fast(total_img)
+                if total_val is not None:
+                    state_fresh.total_pot = total_val
+
+                # log into JSON
+                log_game_state(state_fresh, frame, tag=state.street)
+                print(f"[INFO] hero_bottom timebar ON on {state.street} -> logged snapshot for GoT input.")
                 last_logged_street = state.street
 
-        # ---------- Debug overlay ----------
+        # Debug overlay
         debug = frame.copy()
         cv2.putText(
             debug,
@@ -728,8 +758,8 @@ def main():
             2,
         )
         if state.button_seat is not None:
-            seat_cfg = cfg["seats"][state.button_seat]
-            x, y, w, h = seat_cfg["button_roi"]
+            btn_cfg = cfg["seats"][state.button_seat]
+            x, y, w, h = btn_cfg["button_roi"]
             cv2.rectangle(debug, (x, y), (x + w, y + h), (0, 0, 255), 2)
 
         # Optionally draw hero timebar ROI for sanity
@@ -752,6 +782,7 @@ def main():
         elif key == ord("s"):
             # Manual snapshot at any time
             tracker.drain_all_tasks(frame)
+            state = tracker.state
             log_game_state(tracker.snapshot_copy(), frame.copy(), tag="manual")
             print("[INFO] Manual snapshot logged.")
 
