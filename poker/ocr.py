@@ -101,7 +101,7 @@ def normalize_status(text: str) -> Optional[str]:
         return "raise"
     if "sit" in t:
         return "sit_out"
-    if "all" in t:
+    if "allin" in t:
         return "allin"
     return None
 
@@ -394,6 +394,12 @@ class TableTracker:
         for _ in range(n):
             task = self.tasks.pop(0)
             self._run_task(frame, task)
+            
+    def drain_all_tasks(self, frame: np.ndarray) -> None:
+        """Run all pending OCR tasks on the current frame."""
+        while self.tasks:
+            task = self.tasks.pop(0)
+            self._run_task(frame, task)
 
     # OCR handlers
 
@@ -594,15 +600,15 @@ def main():
     cap = ScreenCapture(cfg)
     tracker = TableTracker(cfg)
 
-    # find bottom_right seat
-    bottom_right_id = None
+    # Find hero seat (hero_bottom)
+    hero_seat_id = None
     for i, seat_cfg in enumerate(cfg["seats"]):
-        if seat_cfg["name"] == "bottom_right":
-            bottom_right_id = i
+        if seat_cfg["name"] == "hero_bottom":
+            hero_seat_id = i
             break
 
-    if bottom_right_id is None:
-        print("[WARN] bottom_right seat not found in config; buffering disabled.")
+    if hero_seat_id is None:
+        print("[WARN] hero_bottom seat not found in config; auto logging disabled.")
 
     TARGET_FPS = 10
     FRAME_DELAY = 1.0 / TARGET_FPS
@@ -610,46 +616,40 @@ def main():
     print("Press 'q' to quit, 'r' to force full resync, 's' to log snapshot.")
 
     frame_idx = 0
-    prev_br_to_act = False  # track bottom_right rising edge
-
+    prev_hero_bar = False          # did hero have the timebar last frame?
+    last_logged_street: Optional[str] = None  # to avoid double-logging same street
 
     while True:
         start = time.time()
         frame = cap.grab_table_frame()
 
-        # Default: light OCR
-        max_tasks = 6
-
-        # bottom_right acting state from previous frame
-        br_to_act_prev = (
-            bottom_right_id is not None
-            and tracker.acting_seat_id == bottom_right_id
-        )
-        if br_to_act_prev:
-            # while villain tanks we can afford more OCR
-            max_tasks = 30
+        # Default: light OCR, you can tune this
+        max_tasks = 10
 
         tracker.update(frame, max_tasks_per_frame=max_tasks)
         state = tracker.state
 
-        # bottom_right acting state after this update
-        br_to_act = (
-            bottom_right_id is not None
-            and tracker.acting_seat_id == bottom_right_id
+        # Is hero's timebar ON now? (we require actual timebar, not heuristic hero_to_act)
+        hero_bar_now = (
+            hero_seat_id is not None
+            and tracker.acting_seat_id == hero_seat_id
         )
 
-        # RISING EDGE: it just became the player before hero's turn
-        if br_to_act and not prev_br_to_act:
-            # Optionally drain remaining OCR tasks once
-            tracker.update(frame, max_tasks_per_frame=999)
+        # ---------- Automatic snapshot: hero timebar rising edge ----------
+        if hero_bar_now and not prev_hero_bar and hero_seat_id is not None:
+            # One snapshot per street (flop/turn/river)
+            if state.street != last_logged_street:
+                # Make sure state is fully updated for THIS frame
+                tracker.drain_all_tasks(frame)
+                state_fresh = tracker.snapshot_copy()
+                frame_fresh = frame.copy()
 
-            state_for_log = tracker.snapshot_copy()
-            frame_for_log = frame.copy()
+                log_game_state(state_fresh, frame_fresh, tag=state.street)
+                print(f"[INFO] hero_bottom timebar ON on {state.street} -> logged snapshot for GoT input.")
 
-            log_game_state(state_for_log, frame_for_log, tag="prehero")
-            print("[INFO] bottom_right to act -> logged snapshot for GoT input.")
+                last_logged_street = state.street
 
-        # Debug overlay
+        # ---------- Debug overlay ----------
         debug = frame.copy()
         cv2.putText(
             debug,
@@ -674,6 +674,14 @@ def main():
             x, y, w, h = seat_cfg["button_roi"]
             cv2.rectangle(debug, (x, y), (x + w, y + h), (0, 0, 255), 2)
 
+        # Optionally draw hero timebar ROI for sanity
+        if hero_seat_id is not None:
+            tb_roi = cfg["seats"][hero_seat_id].get("timebar_roi")
+            if tb_roi:
+                tx, ty, tw, th = tb_roi
+                color = (0, 255, 0) if hero_bar_now else (0, 0, 255)
+                cv2.rectangle(debug, (tx, ty), (tx + tw, ty + th), color, 2)
+
         cv2.imshow("Table + OCR debug", debug)
         key = cv2.waitKey(1) & 0xFF
 
@@ -684,31 +692,21 @@ def main():
             tracker.tasks.clear()
             print("[INFO] Forced full resync.")
         elif key == ord("s"):
-            # Manual snapshot
-            log_game_state(tracker.snapshot(), frame)
+            # Manual snapshot at any time
+            tracker.drain_all_tasks(frame)
+            log_game_state(tracker.snapshot_copy(), frame.copy(), tag="manual")
             print("[INFO] Manual snapshot logged.")
 
-        # Automatic snapshot: right when it becomes bottom_right seat's turn (rising edge)
-        hero_now = tracker.hero_to_act()
-
-        if br_to_act and not prev_br_to_act:
-            # Rising edge: bottom_right just got the timer → snapshot immediately
-            tracker.update(frame, max_tasks_per_frame=999)  # optional OCR drain
-            state_for_log = tracker.snapshot_copy()
-            frame_for_log = frame.copy()
-
-            log_game_state(state_for_log, frame_for_log, tag="prehero")
-            print("[INFO] bottom_right to act -> logged snapshot for GoT input.")
-
-        prev_br_to_act = br_to_act
+        # Track hero timebar state for rising-edge detection
+        prev_hero_bar = hero_bar_now
 
         frame_idx += 1
-
         elapsed = time.time() - start
         if elapsed < FRAME_DELAY:
             time.sleep(FRAME_DELAY - elapsed)
 
     cv2.destroyAllWindows()
+
 
 
 if __name__ == "__main__":

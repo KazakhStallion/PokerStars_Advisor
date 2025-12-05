@@ -22,7 +22,8 @@
       "bet":   [653, 563, 125, 23],
       "card_region": [625, 601, 180, 74],
       "button_roi":  [557, 591, 46, 39],
-      "status_roi":  [675, 680, 156, 35]
+      "status_roi":  [675, 680, 156, 35],
+      "timebar_roi": [618, 773, 193, 7]
     },
     {
       "name": "bottom_right",
