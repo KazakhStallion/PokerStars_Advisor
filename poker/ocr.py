@@ -645,21 +645,32 @@ def main():
             and tracker.acting_seat_id == hero_seat_id
         )
 
-        # ---------- Automatic snapshot: hero timebar rising edge ----------
+        # Automatic snapshot: hero timebar rising edge
         if hero_bar_now and not prev_hero_bar and hero_seat_id is not None:
-            # One snapshot per street (flop/turn/river)
             if state.street != last_logged_street:
-                # Make sure state is fully updated for THIS frame
+                # Apply all queued OCR for THIS frame
                 tracker.drain_all_tasks(frame)
+                state = tracker.state
                 state_fresh = tracker.snapshot_copy()
                 frame_fresh = frame.copy()
 
+                # re-OCR of pot
+                pot_img = crop_roi(frame_fresh, cfg["pot_text"])
+                pot_val = ocr_amount_fast(pot_img)
+                if pot_val is not None:
+                    state_fresh.pot_size = pot_val
+
+                total_img = crop_roi(frame_fresh, cfg["total_pot_text"])
+                total_val = ocr_amount_fast(total_img)
+                if total_val is not None:
+                    state_fresh.total_pot = total_val
+
+                # log into JSON
                 log_game_state(state_fresh, frame_fresh, tag=state.street)
                 print(f"[INFO] hero_bottom timebar ON on {state.street} -> logged snapshot for GoT input.")
-
                 last_logged_street = state.street
 
-        # ---------- Debug overlay ----------
+        # Debug overlay
         debug = frame.copy()
         cv2.putText(
             debug,
@@ -680,8 +691,8 @@ def main():
             2,
         )
         if state.button_seat is not None:
-            seat_cfg = cfg["seats"][state.button_seat]
-            x, y, w, h = seat_cfg["button_roi"]
+            btn_cfg = cfg["seats"][state.button_seat]
+            x, y, w, h = btn_cfg["button_roi"]
             cv2.rectangle(debug, (x, y), (x + w, y + h), (0, 0, 255), 2)
 
         # Optionally draw hero timebar ROI for sanity
@@ -704,6 +715,7 @@ def main():
         elif key == ord("s"):
             # Manual snapshot at any time
             tracker.drain_all_tasks(frame)
+            state = tracker.state
             log_game_state(tracker.snapshot_copy(), frame.copy(), tag="manual")
             print("[INFO] Manual snapshot logged.")
 
