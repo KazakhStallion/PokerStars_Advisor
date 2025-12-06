@@ -738,18 +738,19 @@ def run_simple_evaluator_from_json(json_path: str, iterations: int = 50_000) -> 
     # Preflop
     #    Convert equity into equity bucket
     #       ex: 50% EQ -> "Best hand" bucket
-    #    Suggestion based on position (match with GTO ranges)
+    #       match with GTO ranges
+    #    Suggestion based on position (of active players)
     #       Shift range to be more/less aggressive
     #    React to other bets
     #       Shift range to be more/less aggressive
 
-    # Preflop+
+    # Flop+
     #    Pot equity to hand equity comparison
     #       Can I even call, is EHS > pot_equity? Otherwise fold
     #       Ignore if UTG
     #    Convert equity into equity bucket
     #       ex: 50% EQ -> "Best hand" bucket
-    #    Suggestion based on position (of remaining players)
+    #    Suggestion based on position (of active players)
     #       Shift range to be more/less aggressive
     #    React to other bets
     #       Shift range to be more/less aggressive
