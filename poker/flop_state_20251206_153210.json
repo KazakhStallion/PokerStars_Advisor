@@ -1,0 +1,90 @@
+{
+  "street": "turn",
+  "hero_cards": [
+    "Ah",
+    "5s"
+  ],
+  "board_cards": [
+    "Th",
+    "7c",
+    "8s",
+    "5h"
+  ],
+  "pot_size": 2668.0,
+  "total_pot": 2268.0,
+  "button_seat": 5,
+  "seats": [
+    {
+      "seat_id": 0,
+      "name": "hero_bottom",
+      "stack": 7400.0,
+      "bet": null,
+      "is_hero": true,
+      "has_cards": true,
+      "is_active": true,
+      "position": null,
+      "last_status": "call",
+      "is_sitting_out": false
+    },
+    {
+      "seat_id": 1,
+      "name": "bottom_right",
+      "stack": 16461.0,
+      "bet": 200.0,
+      "is_hero": false,
+      "has_cards": true,
+      "is_active": true,
+      "position": null,
+      "last_status": null,
+      "is_sitting_out": false
+    },
+    {
+      "seat_id": 2,
+      "name": "top_right",
+      "stack": 7307.0,
+      "bet": null,
+      "is_hero": false,
+      "has_cards": true,
+      "is_active": true,
+      "position": null,
+      "last_status": null,
+      "is_sitting_out": false
+    },
+    {
+      "seat_id": 3,
+      "name": "top_middle",
+      "stack": 12123.0,
+      "bet": null,
+      "is_hero": false,
+      "has_cards": true,
+      "is_active": true,
+      "position": null,
+      "last_status": null,
+      "is_sitting_out": false
+    },
+    {
+      "seat_id": 4,
+      "name": "top_left",
+      "stack": 14756.0,
+      "bet": null,
+      "is_hero": false,
+      "has_cards": true,
+      "is_active": true,
+      "position": null,
+      "last_status": null,
+      "is_sitting_out": false
+    },
+    {
+      "seat_id": 5,
+      "name": "bottom_left",
+      "stack": 22528.0,
+      "bet": null,
+      "is_hero": false,
+      "has_cards": false,
+      "is_active": false,
+      "position": null,
+      "last_status": null,
+      "is_sitting_out": true
+    }
+  ]
+}
