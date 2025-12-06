@@ -721,8 +721,8 @@ def run_simple_evaluator_from_json(json_path: str, iterations: int = 50_000) -> 
 
     print("========= Hand Evaluation =========")
     print(f"Street:       {street_name}")
-    print(f"Hero cards:   {" ".join(hero_cards) if hero_cards else "none"}")
-    print(f"Board cards:  {" ".join(board_cards) if board_cards else 'none'}")
+    print(f"Hero cards:   {' '.join(hero_cards) if hero_cards else 'none'}")
+    print(f"Board cards:  {' '.join(board_cards) if board_cards else 'none'}")
     print(f"Hand type:    {hand_type}")
     print(f"Table size:   {num_players} active players")
     print(f"Equity:       {equity:.4f}  ({equity * 100:.2f}%)")
