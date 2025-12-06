@@ -732,6 +732,35 @@ def run_simple_evaluator_from_json(json_path: str, iterations: int = 50_000) -> 
     print(f"Pot equity:   {pot_equity:.4f}  ({pot_equity * 100:.2f}%)")
     print("===================================\n")
 
+    # Future Action Logic Ideas:
+    # Output: "Fold", "Call", "Raise X", "All-in"
+
+    # Preflop
+    #    Convert equity into equity bucket
+    #       ex: 50% EQ -> "Best hand" bucket
+    #    Suggestion based on position (match with GTO ranges)
+    #       Shift range to be more/less aggressive
+    #    React to other bets
+    #       Shift range to be more/less aggressive
+
+    # Preflop+
+    #    Pot equity to hand equity comparison
+    #       Can I even call, is EHS > pot_equity? Otherwise fold
+    #       Ignore if UTG
+    #    Convert equity into equity bucket
+    #       ex: 50% EQ -> "Best hand" bucket
+    #    Suggestion based on position (of remaining players)
+    #       Shift range to be more/less aggressive
+    #    React to other bets
+    #       Shift range to be more/less aggressive
+
+    # Equity buckets:
+    # Best hands – Nutted hands we are prepared to stack off with
+    # Good hands – Hands we want to value bet
+    # Weak hands – Hands with some equity that we want to cheaply get to showdown with
+    # Trash hands – Hands with very low equity that will only win the pot by bluffing
+
+
 
 def main():    
     cfg = load_config()
