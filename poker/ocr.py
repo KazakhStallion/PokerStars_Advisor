@@ -18,10 +18,8 @@ from pathlib import Path
 from poker.capture import load_config, ScreenCapture, BASE_TABLE_WIDTH, BASE_TABLE_HEIGHT
 from poker.models import SeatState, TableState
 from poker.card_templates import load_all_templates
-from poker.simple_evaluator import (
-    evaluate_hero_hand,
-    print_hero_equity_vs_random_hand,
-)
+from poker.simple_evaluator import hero_equity_vs_random_hand
+
 
 # Load rank & suit templates (same as test_card_templates)
 RANK_TEMPLATES, SUIT_TEMPLATES = load_all_templates()
@@ -620,15 +618,30 @@ def log_game_state(state: TableState,
     run_simple_evaluator_from_json(json_path)
 
 
+from typing import Any, Dict, List, Optional, Tuple
+from pathlib import Path
+import json
+
 def extract_state_from_json(
     json_path: str,
-) -> Tuple[List[str], List[str], List[Dict[str, Any]], List[Dict[str, Any]]]:
+) -> Tuple[
+    List[str],                 # hero_cards
+    List[str],                 # board_cards
+    List[Dict[str, Any]],      # seats
+    List[Dict[str, Any]],      # active_seats
+    str,                       # street_name
+    Optional[int],             # button_seat
+    Optional[float],           # pot_size (or None)
+    List[Optional[float]],     # seat_bets (per seat, or None)
+]:
     """
     Read a GameState JSON file and extract:
       - hero_cards:   e.g. ["As", "Kd"]
       - board_cards:  e.g. ["7h", "8h", "9h"]
       - seats:        raw seat dicts from JSON
       - active_seats: subset where is_active == True
+      - pot_size:     current pot size
+      - seat_bets:    list of bet values per seat
     """
     path = Path(json_path)
 
@@ -639,38 +652,86 @@ def extract_state_from_json(
     board_cards: List[str] = state.get("board_cards", [])
     seats: List[Dict[str, Any]] = state.get("seats", [])
 
+    street_name: str = state.get("street", "unknown")
+    button_seat: Optional[int] = state.get("button_seat")
+    pot_size: Optional[float] = state.get("pot_size")
+
+    seat_bets: List[Optional[float]] = [seat.get("bet") for seat in seats]
     active_seats = [s for s in seats if s.get("is_active", False)]
 
-    return hero_cards, board_cards, seats, active_seats
-
+    return (
+        hero_cards,
+        board_cards,
+        seats,
+        active_seats,
+        street_name,
+        button_seat,
+        pot_size,
+        seat_bets,
+    )
 
 def run_simple_evaluator_from_json(json_path: str, iterations: int = 50_000) -> None:
     """
-    Use a GameState JSON snapshot as input to simple_evaluator.
+    Load a GameState JSON snapshot, compute hero's equity vs random hands,
+    and print a formatted summary of the game state.
 
-    - num_players is set to the number of *currently active* players
-      (including hero), i.e. len(active_seats).
+    This uses simple_evaluator.hero_equity_vs_random_hand, which returns
+    (equity, hand_type).
     """
     (
         hero_cards,
         board_cards,
         seats,
         active_seats,
+        street_name,
+        button_seat,
+        pot_size,
+        seat_bets,
     ) = extract_state_from_json(json_path)
 
     num_players = len(active_seats)
 
-    # 1) Print current made hand
-    evaluate_hero_hand(hero_cards, board_cards)
+    non_none_bets = [b for b in seat_bets if b is not None]
+    max_bet = max(non_none_bets) if non_none_bets else None
 
-    # 2) Print hero equity vs random opponents at an N-handed table,
-    #    where N = current active players (hero + random villains).
-    print_hero_equity_vs_random_hand(
+    match button_seat:
+        case 0:
+            position = "BTN"
+        case 1:
+            position = "SB"
+        case 2:
+            position = "BB"     
+        case 3:
+            position = "UTG"
+        case 4:
+            position = "MP"
+        case 5:         
+            position = "CO"
+        case _:
+            position = "unknown"
+
+    pot_equity = max_bet / (pot_size + max_bet) if (pot_size is not None and max_bet is not None) else 0.0
+
+    equity, hand_type = hero_equity_vs_random_hand(
         hero_cards,
         board_cards,
         num_players=num_players,
         iterations=iterations,
     )
+
+    print("========= Hand Evaluation =========")
+    print(f"Street:       {street_name}")
+    print(f"Hero cards:   {" ".join(hero_cards) if hero_cards else "none"}")
+    print(f"Board cards:  {" ".join(board_cards) if board_cards else 'none'}")
+    print(f"Hand type:    {hand_type}")
+    print(f"Table size:   {num_players} active players")
+    print(f"Equity:       {equity:.4f}  ({equity * 100:.2f}%)")
+    print(f"Position:     {position}")
+    print(f"Pot size:     {pot_size if pot_size is not None else 'unknown'}")
+    print(f"Max bet:      {max_bet if max_bet is not None else 'unknown'}")
+    print(f"Pot equity:   {pot_equity:.4f}  ({pot_equity * 100:.2f}%)")
+    print("===================================\n")
+
 
 def main():    
     cfg = load_config()
