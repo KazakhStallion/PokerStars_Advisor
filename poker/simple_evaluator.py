@@ -40,25 +40,21 @@ def evaluate_hero_hand(hero_cards, board_cards):
         5: "River",
     }.get(len(board_cards), "Unknown street")
 
-    print("=== Hand Evaluation ===")
+    print("========= Hand Evaluation =========")
     print(f"Street:       {street_name}")
     print(f"Hero cards:   {' '.join(hero_cards)}")
-    print(f"Board cards:  {' '.join(board_cards) if board_cards else '(none yet)'}")
+    print(f"Board cards:  {' '.join(board_cards) if board_cards else 'none'}")
 
     # Need at least 5 cards to have a made 5-card hand
     if len(all_cards) < 5:
-        print("Hand type:    (More cards needed to form a hand)")
-        print("=======================\n")
+        print("Hand type:    none")
         return None, None
 
     # Evaluate with eval7, hand type
-    # (can delete this in future)
     score = eval7.evaluate(all_cards)
     hand_type = eval7.handtype(score)
 
     print(f"Hand type:    {hand_type}")
-    print(f"Raw score:    {score}")
-    print("=======================\n")
 
     return score, hand_type
 
@@ -216,14 +212,9 @@ def print_hero_equity_vs_random_hand(
         5: "River",
     }.get(len(board_cards), "Unknown street")
 
-    print("=== Hero Equity vs Random Table ===")
-    print(f"Street:        {street_name}")
-    print(f"Hero hand:     {' '.join(hero_cards)}")
-    print(f"Board cards:   {' '.join(board_cards) if board_cards else '(none yet)'}")
-    print(f"Table size:    {num_players} players (hero + {num_players - 1} random opponents)")
-    print("Villain range: Random Hands")
-    print(f"Method:        Monte Carlo ({iterations:,} iterations)")
-    print(f"Equity:        {equity:.4f}  ({equity * 100:.2f}%)")
+    print(f"Table size:   {num_players} active players")
+    print(f"Method:       {iterations:,} Monte Carlo")
+    print(f"Equity:       {equity:.4f}  ({equity * 100:.2f}%)")
     print("===================================\n")
 
     return equity
