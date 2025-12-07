@@ -633,6 +633,7 @@ def extract_state_from_json(
     Optional[int],             # button_seat
     Optional[float],           # pot_size (or None)
     List[Optional[float]],     # seat_bets (per seat, or None)
+    List[Optional[str]],       # seat_statuses (per seat, or None)
 ]:
     """
     Read a GameState JSON file and extract:
@@ -642,6 +643,7 @@ def extract_state_from_json(
       - active_seats: subset where is_active == True
       - pot_size:     current pot size
       - seat_bets:    list of bet values per seat
+      - seat_statuses:list of last_status values per seat
     """
     path = Path(json_path)
 
@@ -658,6 +660,7 @@ def extract_state_from_json(
 
     seat_bets: List[Optional[float]] = [seat.get("bet") for seat in seats]
     active_seats = [s for s in seats if s.get("is_active", False)]
+    seat_statuses: List[Optional[str]] = [seat.get("last_status") for seat in seats]
 
     return (
         hero_cards,
@@ -668,7 +671,9 @@ def extract_state_from_json(
         button_seat,
         pot_size,
         seat_bets,
+        seat_statuses,
     )
+
 
 def run_simple_evaluator_from_json(json_path: str, iterations: int = 50_000) -> None:
     """
@@ -687,7 +692,9 @@ def run_simple_evaluator_from_json(json_path: str, iterations: int = 50_000) -> 
         button_seat,
         pot_size,
         seat_bets,
+        seat_statuses,
     ) = extract_state_from_json(json_path)
+
 
     num_players = len(active_seats)
 
@@ -704,7 +711,7 @@ def run_simple_evaluator_from_json(json_path: str, iterations: int = 50_000) -> 
         case 3:
             position = "UTG"
         case 4:
-            position = "MP"
+            position = "HJ"
         case 5:         
             position = "CO"
         case _:
@@ -719,17 +726,160 @@ def run_simple_evaluator_from_json(json_path: str, iterations: int = 50_000) -> 
         iterations=iterations,
     )
 
+    # Action Logic
+    #num_bets = num of players whose "bet" value is not None and > 0 in addition to their last_status being "bet" or "raise"
+    num_bets = sum(
+        1
+        for bet, status in zip(seat_bets, seat_statuses)
+        if bet is not None and bet > 0 and status in ("bet", "raise", "allin")
+    )
+    action = "Undecided"
+    
+    # Preflop:
+    if street_name == "preflop":
+        if position == "UTG":
+            if equity > 0.20:
+                action = "Raise"
+            else:
+                action = "Fold"
+        elif position == "HJ":
+            if (num_bets == 0):     # open betting
+                if equity > 0.18:
+                    action = "Raise"
+                else:
+                    action = "Fold"
+            elif (num_bets >= 1): 
+                if equity > 0.28:
+                    action = "Raise"
+                elif equity > 0.22:
+                    action = "Call"
+                else:
+                    action = "Fold"
+        elif position == "CO":
+            if (num_bets == 0):     # open betting
+                if equity > 0.50:
+                    action = "Raise"
+                else:
+                    action = "Fold"
+            elif (num_bets == 1): 
+                if equity > 0.55:
+                    action = "Raise"
+                elif equity > 0.30:
+                    action = "Call"
+                else:
+                    action = "Fold"
+            elif (num_bets > 1):  
+                if equity > 0.55:
+                    action = "Raise"
+                elif equity > 0.30:
+                    action = "Call"
+                else:
+                    action = "Fold"    
+        elif position == "BTN":
+            if (num_bets == 0):     # open betting
+                if equity > 0.50:
+                    action = "Raise"
+                else:
+                    action = "Fold"
+            elif (num_bets == 1): 
+                if equity > 0.55:
+                    action = "Raise"
+                elif equity > 0.30:
+                    action = "Call"
+                else:
+                    action = "Fold"
+            elif (num_bets > 1):  
+                if equity > 0.55:
+                    action = "Raise"
+                elif equity > 0.30:
+                    action = "Call"
+                else:
+                    action = "Fold"
+        elif position == "SB":
+            if (num_bets == 0):     # open betting
+                if equity > 0.50:
+                    action = "Raise"
+                else:
+                    action = "Fold"
+            elif (num_bets == 1): 
+                if equity > 0.55:
+                    action = "Raise"
+                elif equity > 0.30:
+                    action = "Call"
+                else:
+                    action = "Fold"
+            elif (num_bets > 1):  
+                if equity > 0.55:
+                    action = "Raise"
+                elif equity > 0.30:
+                    action = "Call"
+                else:   
+                    action = "Fold"      
+        elif position == "BB":
+            if (num_bets == 0):     # open betting
+                if equity > 0.50:
+                    action = "Raise"
+                else:
+                    action = "Fold"
+            elif (num_bets == 1): 
+                if equity > 0.55:
+                    action = "Raise"
+                elif equity > 0.30:
+                    action = "Call"
+                else:
+                    action = "Fold"
+            elif (num_bets > 1):  
+                if equity > 0.55:
+                    action = "Raise"
+                elif equity > 0.30:
+                    action = "Call"
+                else:
+                    action = "Fold"
+    
+    else:   # Flop+ 
+        if (num_bets == 0): #open betting
+            if equity > 0.5:
+                action = "Bet"
+            else:
+                action = "Check"
+        else:
+            relative_equity = equity - pot_equity
+            #  Pot equity to hand equity comparison
+            if relative_equity < 0:
+                action = "Fold"     # fold immediately
+            else:
+                # React to other bets
+                hidden_equity = equity
+                if (num_bets == 1):
+                    hidden_equity -= 0.05
+
+                if (num_bets == 2):
+                    hidden_equity -= 0.10
+
+                # Equity buckets
+                if hidden_equity > 0.55:
+                    action = "Raise"
+                elif hidden_equity > 0.30:
+                    action = "Call" 
+                else:
+                    action = "Fold" 
+
+            # Future: change hidden_equity based on other factors
+            # Optional: add a hand classification (ex: best, good, weak, trash)
+    
     print("========= Hand Evaluation =========")
     print(f"Street:       {street_name}")
     print(f"Hero cards:   {' '.join(hero_cards) if hero_cards else 'none'}")
     print(f"Board cards:  {' '.join(board_cards) if board_cards else 'none'}")
     print(f"Hand type:    {hand_type}")
     print(f"Table size:   {num_players} active players")
-    print(f"Equity:       {equity:.4f}  ({equity * 100:.2f}%)")
     print(f"Position:     {position}")
     print(f"Pot size:     {pot_size if pot_size is not None else 'unknown'}")
     print(f"Max bet:      {max_bet if max_bet is not None else 'unknown'}")
     print(f"Pot equity:   {pot_equity:.4f}  ({pot_equity * 100:.2f}%)")
+    print(f"Num bets:     {num_bets}\n")
+    print(f"Action:       {action}")
+    print(f"Hero Equity:  {equity:.4f}  ({equity * 100:.2f}%)")
     print("===================================\n")
 
     # Future Action Logic Ideas:
@@ -743,6 +893,8 @@ def run_simple_evaluator_from_json(json_path: str, iterations: int = 50_000) -> 
     #       Shift range to be more/less aggressive
     #    React to other bets
     #       Shift range to be more/less aggressive
+    # Notes:   
+    # If you are the first to act, only fold/raise, no calling
 
     # Flop+
     #    Pot equity to hand equity comparison

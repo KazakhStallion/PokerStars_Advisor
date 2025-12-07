@@ -1,19 +1,14 @@
 {
-  "street": "river",
+  "street": "preflop",
   "hero_cards": [
-    "Tc",
-    "2h"
+    "Kc",
+    "Qc"
   ],
   "board_cards": [
-    "9d",
-    "Js",
-    "7d",
-    "5s",
-    "3c"
   ],
-  "pot_size": 1134.0,
-  "total_pot": 756.0,
-  "button_seat": 5,
+  "pot_size": 1156.0,
+  "total_pot": 1156.0,
+  "button_seat": 4,
   "seats": [
     {
       "seat_id": 0,
@@ -31,7 +26,7 @@
       "seat_id": 1,
       "name": "bottom_right",
       "stack": 19222.0,
-      "bet": 378.0,
+      "bet": 400.0,
       "is_hero": false,
       "has_cards": true,
       "is_active": true,
@@ -69,8 +64,8 @@
       "stack": 8000.0,
       "bet": null,
       "is_hero": false,
-      "has_cards": false,
-      "is_active": false,
+      "has_cards": true,
+      "is_active": true,
       "position": null,
       "last_status": null,
       "is_sitting_out": false
@@ -81,8 +76,8 @@
       "stack": 7600.0,
       "bet": null,
       "is_hero": false,
-      "has_cards": false,
-      "is_active": false,
+      "has_cards": true,
+      "is_active": true,
       "position": null,
       "last_status": null,
       "is_sitting_out": false
