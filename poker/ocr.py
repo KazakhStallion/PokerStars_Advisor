@@ -733,6 +733,12 @@ def run_simple_evaluator_from_json(json_path: str, iterations: int = 50_000) -> 
         for bet, status in zip(seat_bets, seat_statuses)
         if bet is not None and bet > 0 and status in ("bet", "raise", "allin")
     )
+
+    num_calls = sum(
+        1
+        for bet, status in zip(seat_bets, seat_statuses)
+        if bet is not None and bet > 0 and status == "call"
+    )
     action = "Undecided"
     
     # Preflop:
@@ -744,7 +750,7 @@ def run_simple_evaluator_from_json(json_path: str, iterations: int = 50_000) -> 
                 action = "Fold"
         elif position == "HJ":
             if (num_bets == 0):     # open betting
-                if equity > 0.18:
+                if equity > 0.19:
                     action = "Raise"
                 else:
                     action = "Fold"
@@ -757,59 +763,94 @@ def run_simple_evaluator_from_json(json_path: str, iterations: int = 50_000) -> 
                     action = "Fold"
         elif position == "CO":
             if (num_bets == 0):     # open betting
-                if equity > 0.50:
+                if equity > 0.18:
                     action = "Raise"
                 else:
                     action = "Fold"
-            elif (num_bets == 1): 
-                if equity > 0.55:
+            elif (num_bets == 1 and num_calls == 0): # 5 players, 1 fold
+                if equity > 0.30:
                     action = "Raise"
-                elif equity > 0.30:
+                elif equity > 0.26:
+                    action = "Call"
+                else:
+                    action = "Fold"
+            elif (num_bets == 1 and num_calls > 0): # 6 players, no folds
+                if equity > 0.26:
+                    action = "Raise"
+                elif equity > 0.21:
                     action = "Call"
                 else:
                     action = "Fold"
             elif (num_bets > 1):  
-                if equity > 0.55:
+                if equity > 0.37:
                     action = "Raise"
-                elif equity > 0.30:
+                elif equity > 0.28:
                     action = "Call"
                 else:
                     action = "Fold"    
         elif position == "BTN":
             if (num_bets == 0):     # open betting
-                if equity > 0.50:
+                if equity > 0.16:
                     action = "Raise"
                 else:
                     action = "Fold"
-            elif (num_bets == 1): 
-                if equity > 0.55:
+            elif (num_bets == 1 and num_calls == 0): # 4 players
+                if equity > 0.33:
                     action = "Raise"
-                elif equity > 0.30:
+                elif equity > 0.28:
+                    action = "Call"
+                else:
+                    action = "Fold"
+            elif (num_bets == 1 and num_calls == 1): # 5 players
+                if equity > 0.32:
+                    action = "Raise"
+                elif equity > 0.27:
+                    action = "Call"
+                else:
+                    action = "Fold"
+            elif (num_bets == 1 and num_calls > 1): # 6 players
+                if equity > 0.30:
+                    action = "Raise"
+                elif equity > 0.28:
                     action = "Call"
                 else:
                     action = "Fold"
             elif (num_bets > 1):  
-                if equity > 0.55:
+                if equity > 0.31:
                     action = "Raise"
-                elif equity > 0.30:
+                elif equity > 0.29:
                     action = "Call"
                 else:
                     action = "Fold"
         elif position == "SB":
             if (num_bets == 0):     # open betting
-                if equity > 0.50:
+                if equity > 0.15:
                     action = "Raise"
                 else:
                     action = "Fold"
-            elif (num_bets == 1): 
-                if equity > 0.55:
+            elif (num_bets == 1 and num_calls == 0): # 3 players
+                if equity > 0.43:
+                    action = "Raise"
+                elif equity > 0.38:
+                    action = "Call"
+                else:
+                    action = "Fold"
+            elif (num_bets == 1 and num_calls == 1): # 4 players
+                if equity > 0.35:
+                    action = "Raise"
+                elif equity > 0.32:
+                    action = "Call"
+                else:
+                    action = "Fold"
+            elif (num_bets == 1 and num_calls > 1): # 5 players
+                if equity > 0.32:
                     action = "Raise"
                 elif equity > 0.30:
                     action = "Call"
                 else:
                     action = "Fold"
             elif (num_bets > 1):  
-                if equity > 0.55:
+                if equity > 0.40:
                     action = "Raise"
                 elif equity > 0.30:
                     action = "Call"
@@ -817,28 +858,42 @@ def run_simple_evaluator_from_json(json_path: str, iterations: int = 50_000) -> 
                     action = "Fold"      
         elif position == "BB":
             if (num_bets == 0):     # open betting
-                if equity > 0.50:
+                if equity > 0.15:
                     action = "Raise"
                 else:
-                    action = "Fold"
-            elif (num_bets == 1): 
-                if equity > 0.55:
+                    action = "Check"
+            elif (num_bets == 1 and num_calls == 0): # 2 players
+                if equity > 0.58:
                     action = "Raise"
-                elif equity > 0.30:
+                elif equity > 0.49:
+                    action = "Call"
+                else:
+                    action = "Fold"
+            elif (num_bets == 1 and num_calls == 1): # 3 players
+                if equity > 0.42:
+                    action = "Raise"
+                elif equity > 0.31:
+                    action = "Call"
+                else:
+                    action = "Fold"
+            elif (num_bets == 1 and num_calls > 1): # 4 players
+                if equity > 0.34:
+                    action = "Raise"
+                elif equity > 0.26:
                     action = "Call"
                 else:
                     action = "Fold"
             elif (num_bets > 1):  
-                if equity > 0.55:
+                if equity > 0.40:
                     action = "Raise"
                 elif equity > 0.30:
                     action = "Call"
-                else:
-                    action = "Fold"
+                else:   
+                    action = "Fold"   
     
     else:   # Flop+ 
         if (num_bets == 0): #open betting
-            if equity > 0.5:
+            if equity > 0.3:
                 action = "Bet"
             else:
                 action = "Check"
@@ -857,9 +912,9 @@ def run_simple_evaluator_from_json(json_path: str, iterations: int = 50_000) -> 
                     hidden_equity -= 0.10
 
                 # Equity buckets
-                if hidden_equity > 0.55:
+                if hidden_equity > 0.35:
                     action = "Raise"
-                elif hidden_equity > 0.30:
+                elif hidden_equity > 0.20:
                     action = "Call" 
                 else:
                     action = "Fold" 
@@ -872,14 +927,14 @@ def run_simple_evaluator_from_json(json_path: str, iterations: int = 50_000) -> 
     print(f"Hero cards:   {' '.join(hero_cards) if hero_cards else 'none'}")
     print(f"Board cards:  {' '.join(board_cards) if board_cards else 'none'}")
     print(f"Hand type:    {hand_type}")
-    print(f"Table size:   {num_players} active players")
+    print(f"Table size:   {num_players} players")
     print(f"Position:     {position}")
     print(f"Pot size:     {pot_size if pot_size is not None else 'unknown'}")
     print(f"Max bet:      {max_bet if max_bet is not None else 'unknown'}")
-    print(f"Pot equity:   {pot_equity:.4f}  ({pot_equity * 100:.2f}%)")
     print(f"Num bets:     {num_bets}\n")
-    print(f"Action:       {action}")
+    print(f"Pot equity:   {pot_equity:.4f}  ({pot_equity * 100:.2f}%)")
     print(f"Hero Equity:  {equity:.4f}  ({equity * 100:.2f}%)")
+    print(f"Action:       {action}")
     print("===================================\n")
 
     # Future Action Logic Ideas:
