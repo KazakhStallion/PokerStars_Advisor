@@ -1,0 +1,86 @@
+{
+  "street": "preflop",
+  "hero_cards": [
+    "Kc",
+    "Qc"
+  ],
+  "board_cards": [
+  ],
+  "pot_size": 1156.0,
+  "total_pot": 1156.0,
+  "button_seat": 4,
+  "seats": [
+    {
+      "seat_id": 0,
+      "name": "hero_bottom",
+      "stack": 7800.0,
+      "bet": null,
+      "is_hero": true,
+      "has_cards": true,
+      "is_active": true,
+      "position": null,
+      "last_status": null,
+      "is_sitting_out": false
+    },
+    {
+      "seat_id": 1,
+      "name": "bottom_right",
+      "stack": 19222.0,
+      "bet": 400.0,
+      "is_hero": false,
+      "has_cards": true,
+      "is_active": true,
+      "position": null,
+      "last_status": "bet",
+      "is_sitting_out": false
+    },
+    {
+      "seat_id": 2,
+      "name": "top_right",
+      "stack": 20156.0,
+      "bet": null,
+      "is_hero": false,
+      "has_cards": true,
+      "is_active": true,
+      "position": null,
+      "last_status": null,
+      "is_sitting_out": false
+    },
+    {
+      "seat_id": 3,
+      "name": "top_middle",
+      "stack": 9600.0,
+      "bet": null,
+      "is_hero": false,
+      "has_cards": true,
+      "is_active": true,
+      "position": null,
+      "last_status": null,
+      "is_sitting_out": false
+    },
+    {
+      "seat_id": 4,
+      "name": "top_left",
+      "stack": 8000.0,
+      "bet": null,
+      "is_hero": false,
+      "has_cards": true,
+      "is_active": true,
+      "position": null,
+      "last_status": null,
+      "is_sitting_out": false
+    },
+    {
+      "seat_id": 5,
+      "name": "bottom_left",
+      "stack": 7600.0,
+      "bet": null,
+      "is_hero": false,
+      "has_cards": true,
+      "is_active": true,
+      "position": null,
+      "last_status": null,
+      "is_sitting_out": false
+    }
+  ]
+}

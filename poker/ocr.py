@@ -13,10 +13,13 @@ import numpy as np
 import pytesseract
 import json
 import copy
+from pathlib import Path
 
 from poker.capture import load_config, ScreenCapture, BASE_TABLE_WIDTH, BASE_TABLE_HEIGHT
 from poker.models import SeatState, TableState
 from poker.card_templates import load_all_templates
+from poker.action_logic import run_simple_evaluator_from_json
+
 
 # Load rank & suit templates (same as test_card_templates)
 RANK_TEMPLATES, SUIT_TEMPLATES = load_all_templates()
@@ -611,7 +614,8 @@ def log_game_state(state: TableState,
 
     print(f"[LOG] Saved game state -> {json_path}")
     print(f"[LOG] Saved frame      -> {img_path}")
-
+    
+    run_simple_evaluator_from_json(json_path)
 
 def main():    
     cfg = load_config()
@@ -674,7 +678,7 @@ def main():
                     state_fresh.total_pot = total_val
 
                 # log into JSON
-                log_game_state(state_fresh, frame_fresh, tag=state.street)
+                log_game_state(state_fresh, frame, tag=state.street)
                 print(f"[INFO] hero_bottom timebar ON on {state.street} -> logged snapshot for GoT input.")
                 last_logged_street = state.street
 
